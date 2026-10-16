@@ -1,0 +1,30 @@
+{
+  "name": "labellens",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Plain-language, evidence-aware explanations of product labels.",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && vite build",
+    "start": "node --env-file-if-exists=.env server/index.ts",
+    "typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.node.json",
+    "test": "node --test server/*.test.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.135.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "4.7.0",
+    "typescript": "5.9.3",
+    "vite": "6.4.1"
+  }
+}
