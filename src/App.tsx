@@ -18,7 +18,7 @@ import { fetchVault, getUnlocked, lock, setCurrent } from './lib/unlock.ts';
 import { blankSections, exampleSections } from './lib/sample.ts';
 import { Capture } from './screens/Capture.tsx';
 import { HistoryScreen } from './screens/History.tsx';
-import { Home } from './screens/Home.tsx';
+import { About } from './screens/About.tsx';
 import { Privacy } from './screens/Privacy.tsx';
 import { Results } from './screens/Results.tsx';
 import { Review } from './screens/Review.tsx';
@@ -194,26 +194,20 @@ export function App() {
     switch (r.name) {
       case 'home':
         return (
-          <Home
+          <Capture
+            images={flow.images}
             status={status}
-            onPhotos={(images) => {
-              startNew();
-              setFlow({ ...emptyFlow(), images });
-              go('/scan');
-            }}
-            onCamera={() => {
-              startNew();
-              go('/scan');
-            }}
+            onChange={(images) => updateFlow({ images })}
+            onContinue={readLabel}
             onTyped={startTyped}
             onExample={startExample}
           />
         );
-      case 'scan':
-        return <Capture images={flow.images} onChange={(images) => updateFlow({ images })} onContinue={readLabel} />;
+      case 'about':
+        return <About status={status} onScan={() => go('/')} onTyped={startTyped} onExample={startExample} />;
       case 'reading':
       case 'analyzing':
-        if (!job) return <Redirect to={r.name === 'reading' ? '/scan' : '/review'} />;
+        if (!job) return <Redirect to={r.name === 'reading' ? '/' : '/review'} />;
         return (
           <Working
             job={job}
@@ -229,7 +223,7 @@ export function App() {
             flow={flow}
             onChange={updateFlow}
             onAnalyze={analyze}
-            onRetake={() => go('/scan')}
+            onRetake={() => go('/')}
           />
         );
       case 'results':

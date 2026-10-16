@@ -1,84 +1,33 @@
-import { useRef, useState } from 'react';
-import type { ServiceStatus } from '../../shared/types.ts';
+import { LIMITS, type ServiceStatus } from '../../shared/types.ts';
 import { Icon } from '../components/Icon.tsx';
 import { Notice } from '../components/ui.tsx';
 import { aiName } from '../lib/api.ts';
 import { STATIC_SITE } from '../lib/mode.ts';
-import { prepareImage, type PreparedImage } from '../lib/image.ts';
-import { LIMITS } from '../../shared/types.ts';
 
 interface Props {
   status: ServiceStatus | 'offline' | null;
-  onPhotos: (images: PreparedImage[]) => void;
-  onCamera: () => void;
+  onScan: () => void;
   onTyped: () => void;
   onExample: () => void;
 }
 
-export function Home({ status, onPhotos, onCamera, onTyped, onExample }: Props) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function handleFiles(files: FileList | null) {
-    if (!files?.length) return;
-    setError(null);
-    setBusy(true);
-    try {
-      const list = [...files].slice(0, LIMITS.maxImages);
-      const images = await Promise.all(list.map((f, i) => prepareImage(f, `Photo ${i + 1}`)));
-      onPhotos(images);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Couldn’t open that photo.');
-    } finally {
-      setBusy(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
-  }
-
+/** What LabelLens is and isn't. The app itself opens on the scanner; this page is linked from it. */
+export function About({ status, onScan, onTyped, onExample }: Props) {
   return (
     <div className="stack">
       <section className="hero" aria-labelledby="hero-title">
-        <span className="eyebrow">Label companion</span>
+        <span className="eyebrow">About LabelLens</span>
         <h1 id="hero-title">Read the label. Understand the product.</h1>
         <p className="lead">
           Photograph the packaging of food, skincare, toothpaste, cleaners or supplements. LabelLens reads the text,
           explains it in plain language, and shows which statements a reliable source backs up, and which it can’t.
         </p>
 
-        {status === 'offline' && (
-          <Notice tone="danger" title="Can’t reach the LabelLens server">
-            The page loaded, but the server isn’t answering. Try again in a moment.
-          </Notice>
-        )}
-        {status && status !== 'offline' && !status.ai && (
-          <Notice tone="warn" title="Label analysis isn’t switched on yet">
-            {status.problem === 'unknown_key'
-              ? 'The server has an AI key, but LabelLens can’t tell which provider it belongs to. '
-              : 'This server has no AI key configured, so reading and explaining labels won’t work. '}
-            You can still look around. The site owner needs to set <code>AI_API_KEY</code> (an Anthropic, OpenAI, Google
-            Gemini or OpenRouter key){status.problem === 'unknown_key' ? <> and <code>AI_PROVIDER</code></> : null}.
-          </Notice>
-        )}
-        {error && <Notice tone="danger">{error}</Notice>}
-
         <div className="hero-actions">
-          <button className="btn btn-primary" onClick={onCamera} disabled={busy}>
+          <button className="btn btn-primary" onClick={onScan}>
             <Icon name="camera" />
-            Scan a label
+            Start scanning
           </button>
-          <button className="btn" onClick={() => fileRef.current?.click()} disabled={busy}>
-            <Icon name="upload" />
-            {busy ? 'Preparing photos…' : 'Upload photos'}
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-            multiple
-            hidden
-            onChange={(e) => handleFiles(e.target.files)}
-          />
         </div>
         <div className="text-links">
           <button className="link-btn" onClick={onTyped}>
