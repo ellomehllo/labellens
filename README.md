@@ -4,7 +4,7 @@ Plain-language, evidence-aware explanations of product labels. Photograph packag
 
 ## Run it
 
-Requires Node 22.18+ (runs the TypeScript server directly).
+Requires Node 22.18+ (runs the TypeScript server directly; `.node-version` pins 24).
 
 ```bash
 npm install
@@ -20,6 +20,14 @@ npm start                   # serves dist/ and the API on http://localhost:8787
 ```
 
 Checks: `npm run typecheck` and `npm test` (server validation and safety rules).
+
+## Deploy (Render)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ellomehllo/labellens)
+
+`render.yaml` defines a free Node web service: `npm ci && npm run build`, then `npm start`, health check on `/api/status`, redeploy on every push to `main`. Render asks for `ANTHROPIC_API_KEY` when you create it. The daily AI-call cap is set to 100.
+
+Free instances sleep after 15 minutes without traffic and take about a minute to wake. The feedback file lives on the instance's temporary disk and is cleared on each deploy.
 
 ## Environment
 
