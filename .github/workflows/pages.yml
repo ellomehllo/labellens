@@ -1,0 +1,56 @@
+# Builds the password-protected static version of LabelLens and publishes it to GitHub Pages.
+# Needs two repository secrets: AI_API_KEY (any supported provider) and APP_PASSWORD.
+# Optional repository variables: AI_PROVIDER and AI_MODEL.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Build static site
+        run: npm run build
+        env:
+          VITE_STATIC: 'true'
+          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_FEEDBACK_URL: ${{ github.server_url }}/${{ github.repository }}/issues/new
+      - name: Seal the AI key with the site password
+        run: node scripts/seal-vault.ts dist/vault.json
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          AI_PROVIDER: ${{ vars.AI_PROVIDER }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

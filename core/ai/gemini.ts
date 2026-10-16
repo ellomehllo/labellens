@@ -12,7 +12,7 @@ interface GeminiResponse {
   candidates?: { finishReason?: string; content?: { parts?: { text?: string; thought?: boolean }[] } }[];
 }
 
-export const callGemini: ProviderCall = async (config, { system, images, text, schema, maxTokens }) => {
+export const callGemini: ProviderCall = async (config, { system, images, text, schema, maxTokens, signal }) => {
   const base = config.baseUrl ?? BASE_URL;
   const body = {
     systemInstruction: { parts: [{ text: system }] },
@@ -30,7 +30,7 @@ export const callGemini: ProviderCall = async (config, { system, images, text, s
   };
 
   const url = `${base}/models/${encodeURIComponent(config.model)}:generateContent`;
-  const data = (await postJson('gemini', url, { 'x-goog-api-key': config.apiKey }, body)) as GeminiResponse;
+  const data = (await postJson('gemini', url, { 'x-goog-api-key': config.apiKey }, body, signal)) as GeminiResponse;
 
   if (data.promptFeedback?.blockReason) {
     throw new AppError('ai_declined', 'The AI service declined to process this label. Try different photos or text.', 422);

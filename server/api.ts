@@ -1,13 +1,13 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { CATEGORIES, FINDING_TYPES, LIMITS, SECTION_LABELS, type ServiceStatus } from '../shared/types.ts';
-import { aiStatus, requireAi, structuredCall } from './ai/index.ts';
-import { PROVIDER_NAMES } from './ai/types.ts';
-import { AppError } from './errors.ts';
-import { ANALYZE_SCHEMA, ANALYZE_SYSTEM, EXTRACT_SCHEMA, EXTRACT_SYSTEM } from './prompts.ts';
+import { checkAnalyzeRequest } from '../core/analysis.ts';
+import { AppError } from '../core/errors.ts';
+import { runAnalyze, runExtract } from '../core/pipeline.ts';
+import { SOURCES } from '../core/sources.ts';
+import { CATEGORIES, FINDING_TYPES, LIMITS, type ServiceStatus } from '../shared/types.ts';
+import { aiStatus, requireAi } from './ai.ts';
 import { takeAiCall } from './ratelimit.ts';
-import { SOURCES } from './sources.ts';
-import { buildAnalysis, checkAnalyzeRequest, checkImages, normalizeExtraction } from './validate.ts';
+import { checkImages } from './validate.ts';
 
 const MAX_BODY = Math.ceil(LIMITS.maxImages * LIMITS.maxImageBytes * 1.4) + 64 * 1024;
 const FEEDBACK_ON = process.env.LABELLENS_FEEDBACK !== 'off';
@@ -62,57 +62,30 @@ export async function apiHandler(req: IncomingMessage, res: ServerResponse, next
 // Step 1: photos -> structured label text. Images are held in memory for this request only.
 async function extract(req: IncomingMessage, res: ServerResponse) {
   const images = checkImages(await readJson(req));
-  limitAi(req);
+  const config = limitAi(req);
   const stream = startStream(res);
-  stream({ stage: 'reading_text' });
-  const { data: raw } = await structuredCall({
-    system: EXTRACT_SYSTEM,
-    images,
-    text: `These ${images.length} photo(s) show one product's packaging. Transcribe the label text as instructed.`,
-    schema: EXTRACT_SCHEMA,
-    effort: 'medium',
-    maxTokens: 16000,
-  });
-  stream({ stage: 'organising_text' });
-  stream({ result: normalizeExtraction(raw) });
+  const extraction = await runExtract(config, images, (stage) => stream({ stage }), abortOnClose(res));
+  stream({ result: extraction });
   res.end();
 }
 
 // Step 2: user-checked text -> explanation with source-checked findings. Text only; no images.
 async function analyze(req: IncomingMessage, res: ServerResponse) {
   const request = checkAnalyzeRequest(await readJson(req));
-  limitAi(req);
+  const config = limitAi(req);
   const stream = startStream(res);
-  stream({ stage: 'interpreting' });
-  const labelText = request.sections
-    .map((s) => {
-      const notes = [s.edited ? 'corrected by user' : null, s.confidence ? `read with ${s.confidence} confidence` : null]
-        .filter(Boolean)
-        .join(', ');
-      return `### ${SECTION_LABELS[s.kind]}${notes ? ` (${notes})` : ''}\n${s.text}`;
-    })
-    .join('\n\n');
-  const { data: raw, model, provider } = await structuredCall({
-    system: ANALYZE_SYSTEM,
-    images: [],
-    text: [
-      `Category: ${request.category}`,
-      `Market where bought: ${request.market ?? 'unknown'}`,
-      `Source of text: ${request.input === 'photo' ? `read from photos (overall readability: ${request.readability ?? 'unknown'})` : request.input === 'example' ? 'LabelLens example label text' : 'typed by the user'}`,
-      '',
-      '<label_text>',
-      labelText,
-      '</label_text>',
-    ].join('\n'),
-    schema: ANALYZE_SCHEMA,
-    effort: 'medium',
-    maxTokens: 24000,
-  });
-  stream({ stage: 'checking_sources' });
-  const analysis = buildAnalysis(raw, request, model, PROVIDER_NAMES[provider]);
-  stream({ stage: 'checking_wording' });
+  const analysis = await runAnalyze(config, request, (stage) => stream({ stage }), abortOnClose(res));
   stream({ result: analysis });
   res.end();
+}
+
+/** Stops paying for an AI call when the browser goes away (e.g. the user pressed Cancel). */
+function abortOnClose(res: ServerResponse): AbortSignal {
+  const controller = new AbortController();
+  res.on('close', () => {
+    if (!res.writableEnded) controller.abort();
+  });
+  return controller.signal;
 }
 
 async function feedback(req: IncomingMessage, res: ServerResponse) {
@@ -136,7 +109,7 @@ async function feedback(req: IncomingMessage, res: ServerResponse) {
 // ---------------------------------------------------------------------------
 
 function limitAi(req: IncomingMessage) {
-  requireAi();
+  const config = requireAi();
   const forwarded = req.headers['x-forwarded-for'];
   const client = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
   const result = takeAiCall(client);
@@ -150,6 +123,7 @@ function limitAi(req: IncomingMessage) {
       429,
     );
   }
+  return config;
 }
 
 /** Newline-delimited JSON progress stream. Stages are only sent when that work actually starts. */

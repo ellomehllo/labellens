@@ -17,7 +17,7 @@ interface ChatResponse {
   }[];
 }
 
-export const callOpenAiCompatible: ProviderCall = async (config, { system, images, text, schema, maxTokens }) => {
+export const callOpenAiCompatible: ProviderCall = async (config, { system, images, text, schema, maxTokens, signal }) => {
   const isOpenRouter = config.provider === 'openrouter';
   const base = config.baseUrl ?? BASE_URLS[isOpenRouter ? 'openrouter' : 'openai'];
 
@@ -49,7 +49,7 @@ export const callOpenAiCompatible: ProviderCall = async (config, { system, image
   const headers: Record<string, string> = { Authorization: `Bearer ${config.apiKey}` };
   if (isOpenRouter) headers['X-Title'] = 'LabelLens';
 
-  const data = (await postJson(config.provider, `${base}/chat/completions`, headers, body)) as ChatResponse;
+  const data = (await postJson(config.provider, `${base}/chat/completions`, headers, body, signal)) as ChatResponse;
   const choice = data.choices?.[0];
   if (!choice?.message) {
     throw new AppError('ai_bad_output', 'The AI service returned an empty response. Please try again.', 502);

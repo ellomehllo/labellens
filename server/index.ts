@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { apiHandler } from './api.ts';
-import { aiStatus } from './ai/index.ts';
+import { aiStatus } from './ai.ts';
 
 const PORT = Number(process.env.PORT) || 8787;
 const DIST = resolve(import.meta.dirname, '../dist');

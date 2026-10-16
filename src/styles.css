@@ -216,6 +216,21 @@ li + li {
   padding: 8px 10px;
   border-radius: 8px;
 }
+.nav-btn {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--muted);
+  font-size: 0.95rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.nav-btn:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
 .site-nav a:hover,
 .site-nav a[aria-current='page'] {
   color: var(--text);
@@ -223,7 +238,8 @@ li + li {
 }
 
 @media (max-width: 420px) {
-  .site-nav a {
+  .site-nav a,
+  .nav-btn {
     padding: 8px 7px;
     font-size: 0.9rem;
   }
@@ -1119,4 +1135,26 @@ details.more .more-body {
 }
 .source-card ul {
   font-size: 0.95rem;
+}
+
+/* ---------- Unlock (GitHub Pages build) ---------- */
+
+.unlock {
+  max-width: 420px;
+  margin: 6vh auto 0;
+}
+.unlock form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.unlock input[type='password'] {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 12px 14px;
+  width: 100%;
+  min-height: 48px;
 }

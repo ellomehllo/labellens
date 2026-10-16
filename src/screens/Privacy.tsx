@@ -1,6 +1,7 @@
 import type { ServiceStatus } from '../../shared/types.ts';
 import { PageTitle } from '../components/ui.tsx';
 import { aiName } from '../lib/api.ts';
+import { STATIC_SITE } from '../lib/mode.ts';
 
 export function Privacy({ status }: { status: ServiceStatus | 'offline' | null }) {
   const provider = status && status !== 'offline' ? status.provider : null;
@@ -11,13 +12,23 @@ export function Privacy({ status }: { status: ServiceStatus | 'offline' | null }
 
       <h2>When you scan a label</h2>
       <ul>
-        <li>Your browser shrinks the photos and sends them to the LabelLens server.</li>
-        <li>
-          The server forwards them to {aiName(status)}
-          {provider ? '' : ' (whichever provider the site owner has configured: Anthropic, OpenAI, Google or OpenRouter)'} to
-          read the text. LabelLens holds the photos in memory
-          for that one request and doesn’t write them to disk or a database.
-        </li>
+        {STATIC_SITE ? (
+          <li>
+            Your browser shrinks the photos and sends them straight to {aiName(status)}
+            {provider ? '' : ' (the AI provider this site is set up with)'} to read the text. This version of LabelLens is
+            static files on GitHub Pages: there is no LabelLens server, so nothing passes through or is stored by one.
+          </li>
+        ) : (
+          <>
+            <li>Your browser shrinks the photos and sends them to the LabelLens server.</li>
+            <li>
+              The server forwards them to {aiName(status)}
+              {provider ? '' : ' (whichever provider the site owner has configured: Anthropic, OpenAI, Google or OpenRouter)'}{' '}
+              to read the text. LabelLens holds the photos in memory for that one request and doesn’t write them to disk
+              or a database.
+            </li>
+          </>
+        )}
         <li>{provider ?? 'That provider'} processes the request under its own API data policies.</li>
         <li>Avoid photographing anything personal, such as prescription labels with your name or address.</li>
       </ul>
@@ -25,7 +36,7 @@ export function Privacy({ status }: { status: ServiceStatus | 'offline' | null }
       <h2>When you ask for an explanation</h2>
       <ul>
         <li>Only the label text you checked on the review screen is sent, not the photos.</li>
-        <li>The server matches statements against a fixed list of curated sources. It doesn’t browse the web.</li>
+        <li>Statements are matched against a fixed list of curated sources. Nothing browses the web.</li>
       </ul>
 
       <h2>What is stored</h2>
@@ -34,10 +45,23 @@ export function Privacy({ status }: { status: ServiceStatus | 'offline' | null }
           <strong>On your device:</strong> results you choose to save (text only) in this browser’s local storage. Delete
           them any time from <a href="#/history">History</a>, or by clearing this site’s data.
         </li>
-        <li>
-          <strong>On the server:</strong> if you use “Report a problem”, the reason, product type and finding title are
-          saved for quality review. No photos, label text or identifiers are included.
-        </li>
+        {STATIC_SITE ? (
+          <>
+            <li>
+              <strong>The site password:</strong> unlocks the AI key in your browser. It’s kept for this tab only, or on
+              this device if you choose “stay unlocked”. “Lock” forgets it.
+            </li>
+            <li>
+              <strong>Reports:</strong> “Report a problem” opens a draft GitHub issue. Nothing is sent unless you submit it
+              there, and it will be public.
+            </li>
+          </>
+        ) : (
+          <li>
+            <strong>On the server:</strong> if you use “Report a problem”, the reason, product type and finding title are
+            saved for quality review. No photos, label text or identifiers are included.
+          </li>
+        )}
         <li>No accounts, no advertising, no tracking cookies.</li>
       </ul>
 

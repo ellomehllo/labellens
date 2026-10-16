@@ -15,25 +15,36 @@ export function parseJson(text: string): unknown {
 
 /**
  * POSTs JSON with a timeout, retrying network errors and 5xx responses.
- * Non-2xx responses become AppErrors with user-facing messages; `label` is used in server logs only.
+ * Non-2xx responses become AppErrors with user-facing messages; `label` is only used in logs.
+ * Runs in Node and in the browser.
  */
-export async function postJson(label: string, url: string, headers: Record<string, string>, body: unknown): Promise<unknown> {
+export async function postJson(
+  label: string,
+  url: string,
+  headers: Record<string, string>,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<unknown> {
   for (let attempt = 0; ; attempt++) {
     let res: Response;
     try {
+      const timeout = AbortSignal.timeout(TIMEOUT_MS);
       res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
     } catch (error) {
+      if (signal?.aborted) throw error;
       if (attempt < RETRIES) {
         await sleep(attempt);
         continue;
       }
       console.error(`[${label}] network error:`, error);
-      throw new AppError('ai_unreachable', 'Couldn’t reach the AI service. Check the server’s connection and try again.', 503);
+      // In a browser, OpenAI's error replies lack CORS headers, so a rejected key looks like a network failure.
+      const keyHint = label === 'openai' && 'window' in globalThis ? ' If your connection is fine, the AI key may be wrong or revoked.' : '';
+      throw new AppError('ai_unreachable', `Couldn’t reach the AI service. Check the connection and try again.${keyHint}`, 503);
     }
 
     if (res.ok) return res.json();
@@ -49,10 +60,10 @@ export async function postJson(label: string, url: string, headers: Record<strin
 
 function httpError(status: number, detail: string): AppError {
   if (/insufficient_quota|billing|credit|RESOURCE_EXHAUSTED.*quota|exceeded your current quota/i.test(detail)) {
-    return new AppError('ai_quota', 'The AI account behind this site has run out of credit. The site owner needs to top it up.', 503);
+    return new AppError('ai_quota', 'The AI account for this key has run out of credit or hit its spending limit.', 503);
   }
   if (status === 401 || status === 403 || /API_KEY_INVALID|invalid api key|invalid_api_key/i.test(detail)) {
-    return new AppError('ai_auth', 'The server’s AI key was rejected. The site owner needs to check it.', 503);
+    return new AppError('ai_auth', 'The AI key was rejected. It may be wrong, revoked or expired.', 503);
   }
   if (status === 429) {
     return new AppError('ai_busy', 'The AI service is busy right now. Please wait a minute and try again.', 503);

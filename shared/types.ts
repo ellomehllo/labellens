@@ -71,6 +71,12 @@ export type Confidence = (typeof CONFIDENCE)[number];
 
 export type InputKind = 'photo' | 'typed' | 'example';
 
+/** A label photo as base64, already validated and re-encoded. */
+export interface ImageInput {
+  media_type: 'image/jpeg' | 'image/png' | 'image/webp';
+  data: string;
+}
+
 export interface LabelSection {
   id: string;
   kind: SectionKind;

@@ -3,6 +3,7 @@ import type { ServiceStatus } from '../../shared/types.ts';
 import { Icon } from '../components/Icon.tsx';
 import { Notice } from '../components/ui.tsx';
 import { aiName } from '../lib/api.ts';
+import { STATIC_SITE } from '../lib/mode.ts';
 import { prepareImage, type PreparedImage } from '../lib/image.ts';
 import { LIMITS } from '../../shared/types.ts';
 
@@ -89,7 +90,8 @@ export function Home({ status, onPhotos, onCamera, onTyped, onExample }: Props) 
         </div>
 
         <Notice tone="plain" icon="shield">
-          Photos are sent to LabelLens’s server and to {aiName(status)} to read the text. LabelLens doesn’t keep
+          Photos are sent {STATIC_SITE ? 'straight from your browser' : 'to LabelLens’s server and'} to {aiName(status)} to
+          read the text. LabelLens doesn’t keep
           them. Results are saved only on this device, and only if you choose to. <a href="#/privacy">How data is handled</a>
         </Notice>
       </section>

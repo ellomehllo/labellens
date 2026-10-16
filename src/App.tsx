@@ -12,7 +12,9 @@ import { Icon } from './components/Icon.tsx';
 import { analyzeLabel, ApiError, extractLabel, getStatus } from './lib/api.ts';
 import { deleteScan, getScan, getSettings, saveScan } from './lib/history.ts';
 import type { PreparedImage } from './lib/image.ts';
+import { STATIC_SITE } from './lib/mode.ts';
 import { go, useRoute, type Route } from './lib/router.ts';
+import { fetchVault, getUnlocked, lock, setCurrent } from './lib/unlock.ts';
 import { blankSections, exampleSections } from './lib/sample.ts';
 import { Capture } from './screens/Capture.tsx';
 import { HistoryScreen } from './screens/History.tsx';
@@ -21,6 +23,7 @@ import { Privacy } from './screens/Privacy.tsx';
 import { Results } from './screens/Results.tsx';
 import { Review } from './screens/Review.tsx';
 import { Sources } from './screens/Sources.tsx';
+import { Unlock, type Gate } from './screens/Unlock.tsx';
 import { Working } from './screens/Working.tsx';
 
 export interface Flow {
@@ -57,12 +60,27 @@ export function App() {
   const [flow, setFlow] = useState<Flow>(emptyFlow);
   const [job, setJob] = useState<Job | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // The GitHub Pages build is password protected: nothing but the privacy page shows until unlocked.
+  const [gate, setGate] = useState<Gate>(STATIC_SITE ? { state: 'loading' } : { state: 'open' });
 
   useEffect(() => {
+    if (!STATIC_SITE) return;
+    fetchVault()
+      .then((vault) => {
+        if (!vault) return setGate({ state: 'missing' });
+        const contents = getUnlocked(vault);
+        setCurrent(contents);
+        setGate(contents ? { state: 'open', vault } : { state: 'locked', vault });
+      })
+      .catch(() => setGate({ state: 'missing' }));
+  }, []);
+
+  useEffect(() => {
+    if (gate.state !== 'open') return;
     getStatus()
       .then(setStatus)
       .catch(() => setStatus('offline'));
-  }, []);
+  }, [gate.state]);
 
   // Leaving a progress screen (e.g. with the back button) cancels the request in flight.
   useEffect(() => {
@@ -151,7 +169,26 @@ export function App() {
     go('/review');
   };
 
-  const content = renderRoute(route);
+  const locked = gate.state !== 'open';
+  const content =
+    locked && route.name !== 'privacy' ? (
+      <Unlock
+        gate={gate}
+        onUnlocked={() => {
+          if (gate.state === 'locked') setGate({ state: 'open', vault: gate.vault });
+        }}
+      />
+    ) : (
+      renderRoute(route)
+    );
+
+  function lockApp() {
+    lock();
+    startNew();
+    setStatus(null);
+    if (gate.state === 'open' && gate.vault) setGate({ state: 'locked', vault: gate.vault });
+    go('/');
+  }
 
   function renderRoute(r: Route) {
     switch (r.name) {
@@ -271,15 +308,24 @@ export function App() {
             LabelLens
           </a>
           <nav className="site-nav" aria-label="Main">
-            <a href="#/history" aria-current={route.name === 'history' || route.name === 'saved' ? 'page' : undefined}>
-              History
-            </a>
-            <a href="#/sources" aria-current={route.name === 'sources' ? 'page' : undefined}>
-              Sources
-            </a>
+            {!locked && (
+              <>
+                <a href="#/history" aria-current={route.name === 'history' || route.name === 'saved' ? 'page' : undefined}>
+                  History
+                </a>
+                <a href="#/sources" aria-current={route.name === 'sources' ? 'page' : undefined}>
+                  Sources
+                </a>
+              </>
+            )}
             <a href="#/privacy" aria-current={route.name === 'privacy' ? 'page' : undefined}>
               Privacy
             </a>
+            {STATIC_SITE && !locked && (
+              <button className="nav-btn" onClick={lockApp} title="Forget the unlocked key on this device">
+                Lock
+              </button>
+            )}
           </nav>
         </div>
       </header>

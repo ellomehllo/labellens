@@ -29,7 +29,7 @@ export function detectProvider(key: string): ProviderId | null {
 
 export type ConfigResult = { ok: true; config: AiConfig } | { ok: false; problem: 'no_key' | 'unknown_key' };
 
-export function resolveConfig(env: Record<string, string | undefined> = process.env): ConfigResult {
+export function resolveConfig(env: Record<string, string | undefined>): ConfigResult {
   const found = KEY_VARS.find(([name]) => env[name]?.trim());
   if (!found) return { ok: false, problem: 'no_key' };
   const [name, impliedProvider] = found;

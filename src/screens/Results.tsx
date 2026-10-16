@@ -4,6 +4,7 @@ import { Icon } from '../components/Icon.tsx';
 import { ConfidenceText, formatDate, Notice, PageTitle, TypeBadge, TYPE_EXPLANATIONS } from '../components/ui.tsx';
 import { sendFeedback } from '../lib/api.ts';
 import { deleteScan } from '../lib/history.ts';
+import { FEEDBACK_URL, STATIC_SITE } from '../lib/mode.ts';
 import { go } from '../lib/router.ts';
 
 interface Props {
@@ -370,8 +371,17 @@ const FEEDBACK_REASONS = [
 
 function FeedbackRow({ finding, analysis }: { finding: Finding; analysis: Analysis }) {
   const [state, setState] = useState<'idle' | 'open' | 'sent' | 'failed'>('idle');
-  if (state === 'sent') return <p className="meta-line">Thanks. Your report helps review LabelLens’s quality.</p>;
+  if (state === 'sent') {
+    return (
+      <p className="meta-line">
+        {STATIC_SITE
+          ? 'A draft GitHub issue opened in a new tab. Submit it there to send the report.'
+          : 'Thanks. Your report helps review LabelLens’s quality.'}
+      </p>
+    );
+  }
   if (state === 'failed') return <p className="meta-line">Couldn’t send the report. Please try later.</p>;
+  if (STATIC_SITE && !FEEDBACK_URL) return null;
   if (state === 'idle') {
     return (
       <div>
