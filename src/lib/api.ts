@@ -9,6 +9,11 @@ export class ApiError extends Error {
   }
 }
 
+/** Names the server's AI provider (e.g. "OpenAI") for privacy wording, or a neutral phrase if unknown. */
+export function aiName(status: ServiceStatus | 'offline' | null): string {
+  return status && status !== 'offline' && status.provider ? status.provider : 'an AI service';
+}
+
 export async function getStatus(): Promise<ServiceStatus> {
   const res = await fetch('/api/status');
   if (!res.ok) throw new ApiError('server_error', 'LabelLens’s server isn’t responding.');

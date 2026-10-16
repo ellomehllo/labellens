@@ -248,7 +248,7 @@ export function App() {
       case 'history':
         return <HistoryScreen />;
       case 'privacy':
-        return <Privacy />;
+        return <Privacy status={status} />;
       case 'sources':
         return <Sources />;
     }

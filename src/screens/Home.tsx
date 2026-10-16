@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { ServiceStatus } from '../../shared/types.ts';
 import { Icon } from '../components/Icon.tsx';
 import { Notice } from '../components/ui.tsx';
+import { aiName } from '../lib/api.ts';
 import { prepareImage, type PreparedImage } from '../lib/image.ts';
 import { LIMITS } from '../../shared/types.ts';
 
@@ -51,8 +52,11 @@ export function Home({ status, onPhotos, onCamera, onTyped, onExample }: Props) 
         )}
         {status && status !== 'offline' && !status.ai && (
           <Notice tone="warn" title="Label analysis isn’t switched on yet">
-            This server has no AI key configured, so reading and explaining labels won’t work. You can still look
-            around; the site owner needs to add <code>ANTHROPIC_API_KEY</code> on the server.
+            {status.problem === 'unknown_key'
+              ? 'The server has an AI key, but LabelLens can’t tell which provider it belongs to. '
+              : 'This server has no AI key configured, so reading and explaining labels won’t work. '}
+            You can still look around. The site owner needs to set <code>AI_API_KEY</code> (an Anthropic, OpenAI, Google
+            Gemini or OpenRouter key){status.problem === 'unknown_key' ? <> and <code>AI_PROVIDER</code></> : null}.
           </Notice>
         )}
         {error && <Notice tone="danger">{error}</Notice>}
@@ -85,7 +89,7 @@ export function Home({ status, onPhotos, onCamera, onTyped, onExample }: Props) 
         </div>
 
         <Notice tone="plain" icon="shield">
-          Photos are sent to LabelLens’s server and to Anthropic’s AI service to read the text. LabelLens doesn’t keep
+          Photos are sent to LabelLens’s server and to {aiName(status)} to read the text. LabelLens doesn’t keep
           them. Results are saved only on this device, and only if you choose to. <a href="#/privacy">How data is handled</a>
         </Notice>
       </section>

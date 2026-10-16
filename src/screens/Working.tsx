@@ -27,7 +27,7 @@ export function Working({ job, onRetry, onBack, onTyped }: Props) {
   const stages = extracting ? EXTRACT_STAGES : ANALYZE_STAGES;
 
   if (job.error) {
-    const notConfigured = job.error.code === 'ai_not_configured' || job.error.code === 'ai_auth';
+    const notConfigured = ['ai_not_configured', 'ai_auth', 'ai_quota', 'ai_model'].includes(job.error.code);
     return (
       <div className="stack">
         <PageTitle eyebrow={extracting ? 'Step 1 of 3' : 'Step 3 of 3'}>

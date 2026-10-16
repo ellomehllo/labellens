@@ -9,7 +9,7 @@
     "build": "npm run typecheck && vite build",
     "start": "node --env-file-if-exists=.env server/index.ts",
     "typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.node.json",
-    "test": "node --test server/*.test.ts"
+    "test": "node --test \"server/**/*.test.ts\""
   },
   "engines": {
     "node": ">=22.18 <27"

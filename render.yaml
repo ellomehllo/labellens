@@ -9,7 +9,8 @@ services:
     healthCheckPath: /api/status
     autoDeployTrigger: commit
     envVars:
-      - key: ANTHROPIC_API_KEY
+      # Any supported key: Anthropic (sk-ant-), OpenAI (sk-), Google Gemini (AIza) or OpenRouter (sk-or-).
+      - key: AI_API_KEY
         sync: false
       - key: LABELLENS_DAILY_LIMIT
         value: "100"

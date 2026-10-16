@@ -16,7 +16,7 @@ import {
   type InputKind,
   type SectionKind,
 } from '../shared/types.ts';
-import { AppError } from './claude.ts';
+import { AppError } from './errors.ts';
 import { findPoint } from './sources.ts';
 
 type Json = Record<string, unknown>;
@@ -174,7 +174,7 @@ function enforceNoVerdicts(input: string, log: SafetyLog): string {
   return kept.join(' ');
 }
 
-export function buildAnalysis(raw: unknown, req: AnalyzeRequest, model: string): Analysis {
+export function buildAnalysis(raw: unknown, req: AnalyzeRequest, model: string, provider: string | null = null): Analysis {
   if (!isObj(raw)) throw new AppError('ai_bad_output', 'The analysis came back in an unexpected format.', 502);
   const log: SafetyLog = { edits: 0 };
   const clean = (v: unknown, max = 2000) => enforceNoVerdicts(text(v, max), log);
@@ -291,6 +291,7 @@ export function buildAnalysis(raw: unknown, req: AnalyzeRequest, model: string):
     next_steps: textList(raw.next_steps, 5),
     meta: {
       model,
+      provider,
       analyzed_at: new Date().toISOString(),
       input: req.input,
       readability: req.readability,

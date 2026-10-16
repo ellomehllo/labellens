@@ -221,6 +221,7 @@ export function Results({ analysis, savedId, fromHistory, onSave, onUnsave, onCo
       <Notice tone="plain" icon="info">
         This explanation is for general information. It isn’t medical, legal or safety advice and doesn’t replace the
         product’s own instructions or a qualified professional. Generated {formatDate(analysis.meta.analyzed_at, true)} by{' '}
+        {analysis.meta.provider ? `${analysis.meta.provider} · ` : ''}
         {analysis.meta.model}.
       </Notice>
 

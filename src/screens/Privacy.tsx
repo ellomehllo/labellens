@@ -1,6 +1,9 @@
+import type { ServiceStatus } from '../../shared/types.ts';
 import { PageTitle } from '../components/ui.tsx';
+import { aiName } from '../lib/api.ts';
 
-export function Privacy() {
+export function Privacy({ status }: { status: ServiceStatus | 'offline' | null }) {
+  const provider = status && status !== 'offline' ? status.provider : null;
   return (
     <div className="prose">
       <PageTitle>Privacy and data</PageTitle>
@@ -10,10 +13,12 @@ export function Privacy() {
       <ul>
         <li>Your browser shrinks the photos and sends them to the LabelLens server.</li>
         <li>
-          The server forwards them to Anthropic’s AI service (Claude) to read the text. LabelLens holds the photos in memory
+          The server forwards them to {aiName(status)}
+          {provider ? '' : ' (whichever provider the site owner has configured: Anthropic, OpenAI, Google or OpenRouter)'} to
+          read the text. LabelLens holds the photos in memory
           for that one request and doesn’t write them to disk or a database.
         </li>
-        <li>Anthropic processes the request under its own commercial data policies.</li>
+        <li>{provider ?? 'That provider'} processes the request under its own API data policies.</li>
         <li>Avoid photographing anything personal, such as prescription labels with your name or address.</li>
       </ul>
 

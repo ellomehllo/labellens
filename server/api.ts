@@ -1,7 +1,9 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { CATEGORIES, FINDING_TYPES, LIMITS, SECTION_LABELS, type ServiceStatus } from '../shared/types.ts';
-import { AppError, MODEL, aiConfigured, structuredCall } from './claude.ts';
+import { aiStatus, requireAi, structuredCall } from './ai/index.ts';
+import { PROVIDER_NAMES } from './ai/types.ts';
+import { AppError } from './errors.ts';
 import { ANALYZE_SCHEMA, ANALYZE_SYSTEM, EXTRACT_SCHEMA, EXTRACT_SYSTEM } from './prompts.ts';
 import { takeAiCall } from './ratelimit.ts';
 import { SOURCES } from './sources.ts';
@@ -24,13 +26,17 @@ export async function apiHandler(req: IncomingMessage, res: ServerResponse, next
   try {
     const route = `${req.method} ${path}`;
     switch (route) {
-      case 'GET /api/status':
+      case 'GET /api/status': {
+        const ai = aiStatus();
         return sendJson(res, 200, {
-          ai: aiConfigured(),
-          model: MODEL,
+          ai: ai.ready,
+          provider: ai.providerName,
+          model: ai.model,
+          problem: ai.problem,
           sources: SOURCES.length,
           limits: { maxImages: LIMITS.maxImages, maxImageBytes: LIMITS.maxImageBytes },
         } satisfies ServiceStatus);
+      }
       case 'GET /api/sources':
         return sendJson(res, 200, { sources: SOURCES });
       case 'POST /api/extract':
@@ -59,18 +65,10 @@ async function extract(req: IncomingMessage, res: ServerResponse) {
   limitAi(req);
   const stream = startStream(res);
   stream({ stage: 'reading_text' });
-  const raw = await structuredCall({
+  const { data: raw } = await structuredCall({
     system: EXTRACT_SYSTEM,
-    content: [
-      ...images.map((img) => ({
-        type: 'image' as const,
-        source: { type: 'base64' as const, media_type: img.media_type, data: img.data },
-      })),
-      {
-        type: 'text' as const,
-        text: `These ${images.length} photo(s) show one product's packaging. Transcribe the label text as instructed.`,
-      },
-    ],
+    images,
+    text: `These ${images.length} photo(s) show one product's packaging. Transcribe the label text as instructed.`,
     schema: EXTRACT_SCHEMA,
     effort: 'medium',
     maxTokens: 16000,
@@ -94,28 +92,24 @@ async function analyze(req: IncomingMessage, res: ServerResponse) {
       return `### ${SECTION_LABELS[s.kind]}${notes ? ` (${notes})` : ''}\n${s.text}`;
     })
     .join('\n\n');
-  const raw = await structuredCall({
+  const { data: raw, model, provider } = await structuredCall({
     system: ANALYZE_SYSTEM,
-    content: [
-      {
-        type: 'text',
-        text: [
-          `Category: ${request.category}`,
-          `Market where bought: ${request.market ?? 'unknown'}`,
-          `Source of text: ${request.input === 'photo' ? `read from photos (overall readability: ${request.readability ?? 'unknown'})` : request.input === 'example' ? 'LabelLens example label text' : 'typed by the user'}`,
-          '',
-          '<label_text>',
-          labelText,
-          '</label_text>',
-        ].join('\n'),
-      },
-    ],
+    images: [],
+    text: [
+      `Category: ${request.category}`,
+      `Market where bought: ${request.market ?? 'unknown'}`,
+      `Source of text: ${request.input === 'photo' ? `read from photos (overall readability: ${request.readability ?? 'unknown'})` : request.input === 'example' ? 'LabelLens example label text' : 'typed by the user'}`,
+      '',
+      '<label_text>',
+      labelText,
+      '</label_text>',
+    ].join('\n'),
     schema: ANALYZE_SCHEMA,
     effort: 'medium',
     maxTokens: 24000,
   });
   stream({ stage: 'checking_sources' });
-  const analysis = buildAnalysis(raw, request, MODEL);
+  const analysis = buildAnalysis(raw, request, model, PROVIDER_NAMES[provider]);
   stream({ stage: 'checking_wording' });
   stream({ result: analysis });
   res.end();
@@ -142,7 +136,7 @@ async function feedback(req: IncomingMessage, res: ServerResponse) {
 // ---------------------------------------------------------------------------
 
 function limitAi(req: IncomingMessage) {
-  if (!aiConfigured()) throw new AppError('ai_not_configured', 'The AI service is not set up on this server yet.', 503);
+  requireAi();
   const forwarded = req.headers['x-forwarded-for'];
   const client = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
   const result = takeAiCall(client);

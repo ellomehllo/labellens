@@ -8,7 +8,7 @@ Requires Node 22.18+ (runs the TypeScript server directly; `.node-version` pins 
 
 ```bash
 npm install
-cp .env.example .env        # then add your ANTHROPIC_API_KEY
+cp .env.example .env        # then add your AI_API_KEY
 npm run dev                 # app + API on http://localhost:5173
 ```
 
@@ -25,7 +25,7 @@ Checks: `npm run typecheck` and `npm test` (server validation and safety rules).
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ellomehllo/labellens)
 
-`render.yaml` defines a free Node web service: `npm ci && npm run build`, then `npm start`, health check on `/api/status`, redeploy on every push to `main`. Render asks for `ANTHROPIC_API_KEY` when you create it. The daily AI-call cap is set to 100.
+`render.yaml` defines a free Node web service: `npm ci && npm run build`, then `npm start`, health check on `/api/status`, redeploy on every push to `main`. Render asks for `AI_API_KEY` when you create it. The daily AI-call cap is set to 100.
 
 Free instances sleep after 15 minutes without traffic and take about a minute to wake. The feedback file lives on the instance's temporary disk and is cleared on each deploy.
 
@@ -33,20 +33,35 @@ Free instances sleep after 15 minutes without traffic and take about a minute to
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | yes | Claude API key. Read only by the server. |
-| `LABELLENS_MODEL` | no | Defaults to `claude-opus-5-5`. |
+| `AI_API_KEY` | yes | Key for any supported provider. Read only by the server. |
+| `AI_PROVIDER` | no | `anthropic`, `openai`, `gemini` or `openrouter`. Only needed if the key's format isn't recognised. |
+| `AI_MODEL` | no | Overrides the provider's default model (below). |
+| `AI_BASE_URL` | no | Points the OpenAI adapter at another OpenAI-compatible endpoint. |
 | `PORT` | no | Production server port, default 8787. |
 | `LABELLENS_DAILY_LIMIT` | no | Max AI calls per day across all users, default 300. |
 | `LABELLENS_FEEDBACK` | no | `off` stops writing reports to `data/feedback.jsonl`. |
 
-Without a key the app runs and shows a clear "analysis isn't switched on" state.
+Provider-specific names (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) also work. Without a key the app runs and shows a clear "analysis isn't switched on" state.
+
+## AI providers
+
+The provider is detected from the key, and each adapter lives in `server/ai/`:
+
+| Provider | Key looks like | Default model | Adapter |
+| --- | --- | --- | --- |
+| Anthropic | `sk-ant-…` | `claude-opus-5-5` | Official SDK, structured outputs, prompt caching |
+| OpenAI | `sk-…` / `sk-proj-…` | `gpt-6-astra` | Chat Completions, strict JSON schema |
+| Google Gemini | `AIza…` | `gemini-3.8-flash` | `generateContent`, JSON schema |
+| OpenRouter | `sk-or-…` | `anthropic/claude-opus-5.5` | Chat Completions, routed only to schema-enforcing endpoints |
+
+Any model you choose needs image input and JSON-schema output. The same prompts, source registry and server-side validation apply whichever provider answers.
 
 ## How it works
 
 1. **Capture** (`src/screens/Capture.tsx`): camera or upload, up to 4 photos. The browser orients, downsizes and re-encodes them as JPEG and runs quick blur/darkness/glare hints.
-2. **Read** (`POST /api/extract`): Claude transcribes only visible text into typed sections, marks unreadable characters with `[?]`, and guesses category and market. Images stay in memory for that request only.
+2. **Read** (`POST /api/extract`): the AI model transcribes only visible text into typed sections, marks unreadable characters with `[?]`, and guesses category and market. Images stay in memory for that request only.
 3. **Review** (`src/screens/Review.tsx`): the user corrects critical fields (ingredients, allergens, amounts, directions, warnings, dates) and confirms category and market. Typed text and a clearly labelled example label use the same screen.
-4. **Explain** (`POST /api/analyze`): text only. Claude returns structured findings and may cite only `source_id`/`point_id` pairs from the curated registry (`server/sources.ts`); it can't supply URLs.
+4. **Explain** (`POST /api/analyze`): text only. The model returns structured findings and may cite only `source_id`/`point_id` pairs from the curated registry (`server/sources.ts`); it can't supply URLs.
 5. **Validate** (`server/validate.ts`): references are resolved against the registry and unknown ones are dropped. A "verified" finding with no resolvable source is downgraded to "Not verified". Sentences stating absolute safety verdicts are removed and the removal is disclosed. A jurisdiction caveat is added when a source's country differs from the selected market.
 6. **Results** (`src/screens/Results.tsx`): summary, label facts, precautions, ingredients grouped by purpose, source-checked and unverified findings, limits, and a correction loop. Poison-help guidance appears for cleaners and label first-aid warnings.
 

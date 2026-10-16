@@ -141,6 +141,7 @@ export interface Analysis {
   next_steps: string[];
   meta: {
     model: string;
+    provider?: string | null;
     analyzed_at: string;
     input: InputKind;
     readability: Extraction['readability'] | null;
@@ -178,7 +179,10 @@ export interface Source {
 
 export interface ServiceStatus {
   ai: boolean;
-  model: string;
+  /** Display name of the AI provider behind this server, e.g. "OpenAI". */
+  provider: string | null;
+  model: string | null;
+  problem: 'no_key' | 'unknown_key' | null;
   sources: number;
   limits: { maxImages: number; maxImageBytes: number };
 }

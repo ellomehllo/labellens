@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { apiHandler } from './api.ts';
-import { aiConfigured, MODEL } from './claude.ts';
+import { aiStatus } from './ai/index.ts';
 
 const PORT = Number(process.env.PORT) || 8787;
 const DIST = resolve(import.meta.dirname, '../dist');
@@ -63,5 +63,12 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`LabelLens running at http://localhost:${PORT}`);
-  console.log(aiConfigured() ? `AI: ${MODEL}` : 'AI: not configured (set ANTHROPIC_API_KEY in .env)');
+  const ai = aiStatus();
+  console.log(
+    ai.ready
+      ? `AI: ${ai.providerName} · ${ai.model}`
+      : ai.problem === 'unknown_key'
+        ? 'AI: key not recognised (set AI_PROVIDER to anthropic, openai, gemini or openrouter)'
+        : 'AI: not configured (set AI_API_KEY in .env)',
+  );
 });
