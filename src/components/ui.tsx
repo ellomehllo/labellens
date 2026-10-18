@@ -1,6 +1,29 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import type { Confidence, FindingType } from '../../shared/types.ts';
+import type { Category, Confidence, FindingType, HighlightKind } from '../../shared/types.ts';
 import { Icon, type IconName } from './Icon.tsx';
+
+/** Back arrow, centred title and an optional action, as on every inner screen of the design. */
+export function TopBar({ title, onBack, action }: { title: string; onBack?: () => void; action?: ReactNode }) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    ref.current?.focus({ preventScroll: true });
+  }, []);
+  return (
+    <header className="topbar">
+      {onBack ? (
+        <button className="icon-btn" onClick={onBack} aria-label="Back">
+          <Icon name="back" size={22} />
+        </button>
+      ) : (
+        <span />
+      )}
+      <h1 ref={ref} tabIndex={-1}>
+        {title}
+      </h1>
+      <span className="topbar-action">{action}</span>
+    </header>
+  );
+}
 
 export function Notice({
   tone = 'info',
@@ -16,7 +39,9 @@ export function Notice({
   const fallback: IconName = tone === 'warn' || tone === 'danger' ? 'alert' : tone === 'ok' ? 'checkCircle' : 'info';
   return (
     <div className={`notice ${tone}`} role={tone === 'danger' ? 'alert' : undefined}>
-      <Icon name={icon ?? fallback} />
+      <span className="notice-icon">
+        <Icon name={icon ?? fallback} size={18} />
+      </span>
       <div className="notice-body">
         {title && <strong>{title}</strong>}
         {children}
@@ -25,18 +50,38 @@ export function Notice({
   );
 }
 
+const HIGHLIGHT_STYLE: Record<HighlightKind, { tone: string; icon: IconName }> = {
+  count: { tone: 'blue', icon: 'check' },
+  diet: { tone: 'green', icon: 'leaf' },
+  storage: { tone: 'amber', icon: 'snowflake' },
+  allergen: { tone: 'amber', icon: 'alert' },
+  warning: { tone: 'amber', icon: 'alert' },
+  claim: { tone: 'plain', icon: 'tag' },
+  other: { tone: 'plain', icon: 'info' },
+};
+
+export function Chip({ kind, children }: { kind: HighlightKind; children: ReactNode }) {
+  const style = HIGHLIGHT_STYLE[kind];
+  return (
+    <span className={`chip chip-${style.tone}`}>
+      <Icon name={style.icon} size={14} />
+      {children}
+    </span>
+  );
+}
+
 const TYPE_BADGES: Record<FindingType, { label: string; icon: IconName; tone: string }> = {
-  label_fact: { label: 'On the label', icon: 'tag', tone: '' },
-  interpretation: { label: 'Interpretation', icon: 'bulb', tone: 'info' },
-  verified_claim: { label: 'Source-checked', icon: 'checkCircle', tone: 'accent' },
+  label_fact: { label: 'On the label', icon: 'tag', tone: 'plain' },
+  interpretation: { label: 'Mochi’s reading', icon: 'bulb', tone: 'blue' },
+  verified_claim: { label: 'Source-checked', icon: 'checkCircle', tone: 'green' },
   unverified: { label: 'Not verified', icon: 'help', tone: 'dashed' },
 };
 
 export function TypeBadge({ type }: { type: FindingType }) {
   const badge = TYPE_BADGES[type];
   return (
-    <span className={`chip ${badge.tone}`}>
-      <Icon name={badge.icon} />
+    <span className={`badge badge-${badge.tone}`}>
+      <Icon name={badge.icon} size={13} />
       {badge.label}
     </span>
   );
@@ -44,7 +89,7 @@ export function TypeBadge({ type }: { type: FindingType }) {
 
 export const TYPE_EXPLANATIONS: Record<FindingType, string> = {
   label_fact: 'Text the label itself states.',
-  interpretation: 'LabelLens’s plain-language reading, from general knowledge.',
+  interpretation: 'Mochi’s plain-language reading, from general knowledge.',
   verified_claim: 'Backed by a specific statement from a curated official source.',
   unverified: 'Couldn’t be checked against a reliable source.',
 };
@@ -60,47 +105,14 @@ export function ConfidenceText({ value }: { value: Confidence | null }) {
   return <span className="meta-line">{CONFIDENCE_TEXT[value]}</span>;
 }
 
-export interface Stage {
-  id: string;
-  label: string;
-}
-
-/** Steps only advance when the server reports that work has actually started. */
-export function Progress({ stages, current }: { stages: Stage[]; current: string | null }) {
-  const index = current ? stages.findIndex((s) => s.id === current) : 0;
-  return (
-    <ol className="progress" aria-live="polite">
-      {stages.map((stage, i) => {
-        const state = i < index ? 'done' : i === index ? 'active' : 'pending';
-        return (
-          <li key={stage.id} data-state={state}>
-            <span className="progress-dot">{state === 'done' && <Icon name="check" size={14} />}</span>
-            <span>
-              {stage.label}
-              <span className="visually-hidden">{state === 'done' ? ' (done)' : state === 'active' ? ' (in progress)' : ''}</span>
-            </span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-/** Moves focus to a page heading on mount so screen readers announce the new screen. */
-export function PageTitle({ children, eyebrow }: { children: ReactNode; eyebrow?: string }) {
-  const ref = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    ref.current?.focus({ preventScroll: true });
-  }, []);
-  return (
-    <div className="stack tight">
-      {eyebrow && <span className="eyebrow">{eyebrow}</span>}
-      <h1 ref={ref} tabIndex={-1}>
-        {children}
-      </h1>
-    </div>
-  );
-}
+export const CATEGORY_ICONS: Record<Category, IconName> = {
+  food: 'leaf',
+  cosmetics: 'sparkles',
+  oral_care: 'smile',
+  cleaner: 'droplet',
+  supplement: 'pill',
+  other: 'tag',
+};
 
 export function formatDate(iso: string | null, withTime = false): string {
   if (!iso) return 'not shown';
@@ -113,3 +125,14 @@ export function formatDate(iso: string | null, withTime = false): string {
     ...(withTime ? { hour: 'numeric', minute: '2-digit' } : {}),
   });
 }
+
+export function timeAgo(iso: string): string {
+  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return formatDate(iso);
+}
+
+export const DISCLAIMER = 'Mochi helps you understand labels. It doesn’t replace the label itself or professional advice.';

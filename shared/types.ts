@@ -4,7 +4,7 @@ export const CATEGORIES = ['food', 'cosmetics', 'oral_care', 'cleaner', 'supplem
 export type Category = (typeof CATEGORIES)[number];
 
 export const CATEGORY_LABELS: Record<Category, string> = {
-  food: 'Food & drink',
+  food: 'Food & beverage',
   cosmetics: 'Cosmetics & skincare',
   oral_care: 'Oral care',
   cleaner: 'Household cleaner',
@@ -130,9 +130,24 @@ export interface Finding {
   why_unverified: string | null;
 }
 
-export interface IngredientGroup {
-  group: string;
-  items: { name: string; explanation: string; confidence: Confidence }[];
+export const HIGHLIGHT_KINDS = ['count', 'diet', 'storage', 'allergen', 'warning', 'claim', 'other'] as const;
+export type HighlightKind = (typeof HIGHLIGHT_KINDS)[number];
+
+export interface Ingredient {
+  name: string;
+  /** Amount exactly as printed on the label, e.g. "10%". */
+  percent: string | null;
+  /** One- or two-word usual function, e.g. "Base", "Sweetener". Never a good/bad judgement. */
+  role: string;
+  explanation: string;
+  confidence: Confidence;
+}
+
+export interface AskMochi {
+  question: string;
+  answer: string;
+  type: FindingType;
+  evidence: Evidence[];
 }
 
 export interface Analysis {
@@ -141,7 +156,10 @@ export interface Analysis {
   category_note: string | null;
   label_facts: { field: string; value: string }[];
   findings: Finding[];
-  ingredient_groups: IngredientGroup[];
+  headline: string | null;
+  highlights: { text: string; kind: HighlightKind }[];
+  ingredients: Ingredient[];
+  questions: AskMochi[];
   unreadable_or_missing: string[];
   overall_limitations: string[];
   next_steps: string[];

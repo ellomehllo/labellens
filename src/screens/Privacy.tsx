@@ -1,14 +1,15 @@
 import type { ServiceStatus } from '../../shared/types.ts';
-import { PageTitle } from '../components/ui.tsx';
+import { TopBar } from '../components/ui.tsx';
 import { aiName } from '../lib/api.ts';
 import { STATIC_SITE } from '../lib/mode.ts';
 
-export function Privacy({ status }: { status: ServiceStatus | 'offline' | null }) {
+export function Privacy({ status, onBack }: { status: ServiceStatus | 'offline' | null; onBack: () => void }) {
   const provider = status && status !== 'offline' ? status.provider : null;
   return (
-    <div className="prose">
-      <PageTitle>Privacy and data</PageTitle>
-      <p className="lead">The short version: photos are used once to read the text, then discarded. Results stay on your device only if you save them.</p>
+    <>
+    <TopBar title="Privacy" onBack={onBack} />
+    <div className="screen prose">
+      <p className="lead">The short version: photos are used once to read the text, then discarded. Scan history stays in this browser tab for the session, and you can turn it off.</p>
 
       <h2>When you scan a label</h2>
       <ul>
@@ -42,8 +43,8 @@ export function Privacy({ status }: { status: ServiceStatus | 'offline' | null }
       <h2>What is stored</h2>
       <ul>
         <li>
-          <strong>On your device:</strong> results you choose to save (text only) in this browser’s local storage. Delete
-          them any time from <a href="#/history">History</a>, or by clearing this site’s data.
+          <strong>On your device:</strong> scan results (text only, never photos) in this browser tab’s storage. Kept for
+          this session only, and you can turn it off or clear it in <a href="#/settings">Settings</a>.
         </li>
         {STATIC_SITE ? (
           <>
@@ -71,5 +72,6 @@ export function Privacy({ status }: { status: ServiceStatus | 'offline' | null }
         doesn’t replace the product label, a doctor, pharmacist, poison service or regulator.
       </p>
     </div>
+    </>
   );
 }

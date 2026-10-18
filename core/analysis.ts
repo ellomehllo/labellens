@@ -2,6 +2,7 @@ import {
   CATEGORIES,
   CONFIDENCE,
   FINDING_TYPES,
+  HIGHLIGHT_KINDS,
   LIMITS,
   RELEVANCE,
   SECTION_KINDS,
@@ -133,8 +134,12 @@ export function buildAnalysis(raw: unknown, req: AnalyzeRequest, model: string, 
   if (!isObj(raw)) throw new AppError('ai_bad_output', 'The analysis came back in an unexpected format.', 502);
   const log: SafetyLog = { edits: 0 };
   const clean = (v: unknown, max = 2000) => enforceNoVerdicts(text(v, max), log);
-  const retrievedAt = new Map<string, string>();
   let dropped = 0;
+  const resolve = (refs: unknown): Evidence[] => {
+    const { evidence, unknown } = resolveEvidence(refs);
+    dropped += unknown;
+    return evidence;
+  };
 
   const findings: Finding[] = [];
   for (const f of Array.isArray(raw.findings) ? raw.findings.slice(0, 16) : []) {
@@ -143,29 +148,7 @@ export function buildAnalysis(raw: unknown, req: AnalyzeRequest, model: string, 
     const explanation = clean(f.explanation);
     if (!title || !explanation) continue;
 
-    const evidence: Evidence[] = [];
-    const seen = new Set<string>();
-    for (const e of Array.isArray(f.evidence) ? f.evidence : []) {
-      const hit = isObj(e) ? findPoint(String(e.source_id), String(e.point_id)) : null;
-      if (!hit) {
-        dropped++;
-        continue;
-      }
-      const key = `${hit.source.id}/${hit.point.id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      retrievedAt.set(hit.source.id, hit.source.checked);
-      evidence.push({
-        source_id: hit.source.id,
-        title: hit.source.title,
-        publisher: hit.source.publisher,
-        url: hit.source.url,
-        jurisdiction: hit.source.jurisdiction,
-        published_or_updated_at: hit.source.updated,
-        retrieved_at: hit.source.checked,
-        supports_claim: hit.point.text,
-      });
-    }
+    const evidence = resolve(f.evidence);
 
     let type = oneOf(FINDING_TYPES, f.type, 'interpretation');
     let whyUnverified = textOrNull(f.why_unverified, 500);
@@ -195,22 +178,35 @@ export function buildAnalysis(raw: unknown, req: AnalyzeRequest, model: string, 
     });
   }
 
-  const groups = (Array.isArray(raw.ingredient_groups) ? raw.ingredient_groups : [])
+  const ingredients = (Array.isArray(raw.ingredients) ? raw.ingredients : [])
     .filter(isObj)
-    .slice(0, 12)
-    .map((g) => ({
-      group: text(g.group, 80) || 'Ingredients',
-      items: (Array.isArray(g.items) ? g.items : [])
-        .filter(isObj)
-        .slice(0, 60)
-        .map((i) => ({
-          name: text(i.name, 120),
-          explanation: clean(i.explanation, 400),
-          confidence: oneOf(CONFIDENCE, i.confidence, 'medium') as Confidence,
-        }))
-        .filter((i) => i.name),
+    .slice(0, 80)
+    .map((i) => ({
+      name: text(i.name, 120),
+      percent: textOrNull(i.percent, 20),
+      role: text(i.role, 30) || 'Ingredient',
+      explanation: clean(i.explanation, 400),
+      confidence: oneOf(CONFIDENCE, i.confidence, 'medium') as Confidence,
     }))
-    .filter((g) => g.items.length > 0);
+    .filter((i) => i.name);
+
+  const questions = (Array.isArray(raw.questions) ? raw.questions : [])
+    .filter(isObj)
+    .slice(0, 4)
+    .map((q) => {
+      const evidence = resolve(q.evidence);
+      let type = oneOf(FINDING_TYPES, q.type, 'interpretation');
+      if (type === 'verified_claim' && evidence.length === 0) type = 'unverified';
+      return { question: text(q.question, 60), answer: clean(q.answer, 600), type, evidence };
+    })
+    .filter((q) => q.question && q.answer);
+
+  // Chips are short label-derived facts; verdict words never become a chip.
+  const highlights = (Array.isArray(raw.highlights) ? raw.highlights : [])
+    .filter(isObj)
+    .map((h) => ({ text: text(h.text, 28), kind: oneOf(HIGHLIGHT_KINDS, h.kind, 'other') }))
+    .filter((h) => h.text && !VERDICT_WORDS.test(h.text))
+    .slice(0, 4);
 
   const summary = clean(raw.summary, 800);
   if (!summary && findings.length === 0) {
@@ -240,7 +236,10 @@ export function buildAnalysis(raw: unknown, req: AnalyzeRequest, model: string, 
       .map((x) => ({ field: text(x.field, 80), value: text(x.value, 800) }))
       .filter((x) => x.field && x.value),
     findings,
-    ingredient_groups: groups,
+    headline: clean(raw.headline, 80) || null,
+    highlights,
+    ingredients,
+    questions,
     unreadable_or_missing: textList(raw.unreadable_or_missing, 10),
     overall_limitations: overall,
     next_steps: textList(raw.next_steps, 5),
@@ -254,6 +253,35 @@ export function buildAnalysis(raw: unknown, req: AnalyzeRequest, model: string, 
       dropped_references: dropped,
     },
   };
+}
+
+const VERDICT_WORDS = /\b(safe|unsafe|healthy|unhealthy|toxic|non-?toxic|harmful|dangerous|clean|chemical-?free|good|bad)\b/i;
+
+function resolveEvidence(refs: unknown): { evidence: Evidence[]; unknown: number } {
+  const evidence: Evidence[] = [];
+  const seen = new Set<string>();
+  let unknown = 0;
+  for (const e of Array.isArray(refs) ? refs : []) {
+    const hit = isObj(e) ? findPoint(String(e.source_id), String(e.point_id)) : null;
+    if (!hit) {
+      unknown++;
+      continue;
+    }
+    const key = `${hit.source.id}/${hit.point.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    evidence.push({
+      source_id: hit.source.id,
+      title: hit.source.title,
+      publisher: hit.source.publisher,
+      url: hit.source.url,
+      jurisdiction: hit.source.jurisdiction,
+      published_or_updated_at: hit.source.updated,
+      retrieved_at: hit.source.checked,
+      supports_claim: hit.point.text,
+    });
+  }
+  return { evidence, unknown };
 }
 
 const MARKET_JURISDICTION: Record<string, string> = {

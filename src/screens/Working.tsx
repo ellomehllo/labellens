@@ -1,18 +1,19 @@
 import type { Job } from '../App.tsx';
-import { Icon } from '../components/Icon.tsx';
-import { Notice, PageTitle, Progress, type Stage } from '../components/ui.tsx';
+import { Mochi, SpeechBubble } from '../components/Mochi.tsx';
+import { Notice } from '../components/ui.tsx';
 
-const EXTRACT_STAGES: Stage[] = [
-  { id: 'uploading', label: 'Sending photos to the server' },
-  { id: 'reading_text', label: 'Reading the text on the label' },
-  { id: 'organising_text', label: 'Sorting it into ingredients, directions, warnings…' },
+// Each line appears only once the server (or the in-browser engine) reports that step has started.
+const EXTRACT_STAGES = [
+  { id: 'uploading', line: 'Getting your photo…' },
+  { id: 'reading_text', line: 'Spotting the ingredients…' },
+  { id: 'organising_text', line: 'Sorting what I read…' },
 ];
 
-const ANALYZE_STAGES: Stage[] = [
-  { id: 'sending', label: 'Sending the checked text' },
-  { id: 'interpreting', label: 'Explaining the label in plain language' },
-  { id: 'checking_sources', label: 'Matching statements to curated sources' },
-  { id: 'checking_wording', label: 'Checking for unsupported safety claims' },
+const ANALYZE_STAGES = [
+  { id: 'sending', line: 'Getting ready…' },
+  { id: 'interpreting', line: 'Reading the tiny print…' },
+  { id: 'checking_sources', line: 'Checking trusted sources…' },
+  { id: 'checking_wording', line: 'Double-checking my wording…' },
 ];
 
 interface Props {
@@ -29,30 +30,24 @@ export function Working({ job, onRetry, onBack, onTyped }: Props) {
   if (job.error) {
     const notConfigured = ['ai_not_configured', 'ai_auth', 'ai_quota', 'ai_model'].includes(job.error.code);
     return (
-      <div className="stack">
-        <PageTitle eyebrow={extracting ? 'Step 1 of 3' : 'Step 3 of 3'}>
-          {extracting ? 'The label couldn’t be read' : 'The label couldn’t be explained'}
-        </PageTitle>
+      <div className="working">
+        <SpeechBubble>{extracting ? 'Hmm, I couldn’t read that one.' : 'Hmm, I got stuck explaining that.'}</SpeechBubble>
+        <Mochi size={150} />
+        <h1 className="visually-hidden">{extracting ? 'The label couldn’t be read' : 'The label couldn’t be explained'}</h1>
         <Notice tone="danger" title="What happened">
           {job.error.message}
         </Notice>
-        {extracting && !notConfigured && (
-          <p className="muted">
-            Nothing was saved. Your photos are still here if you want to try again or retake them.
-          </p>
-        )}
-        <div className="row">
+        <div className="working-actions">
           {!notConfigured && job.error.code !== 'rate_limited' && (
-            <button className="btn btn-primary" onClick={onRetry}>
+            <button className="btn-primary" onClick={onRetry}>
               Try again
             </button>
           )}
-          <button className="btn" onClick={onBack}>
-            <Icon name="back" />
-            {extracting ? 'Back to photos' : 'Back to the text'}
+          <button className="btn-soft" onClick={onBack}>
+            {extracting ? 'Back to the camera' : 'Back to the text'}
           </button>
           {extracting && (
-            <button className="btn btn-ghost" onClick={onTyped}>
+            <button className="text-btn" onClick={onTyped}>
               Type the text instead
             </button>
           )}
@@ -61,24 +56,23 @@ export function Working({ job, onRetry, onBack, onTyped }: Props) {
     );
   }
 
+  const index = Math.max(0, stages.findIndex((s) => s.id === job.stage));
   return (
-    <div className="stack">
-      <PageTitle eyebrow={extracting ? 'Step 1 of 3' : 'Step 3 of 3'}>
-        {extracting ? 'Reading your label' : 'Explaining your label'}
-      </PageTitle>
-      <p className="muted">
-        {extracting
-          ? 'This usually takes 10–30 seconds. Only the visible text is transcribed; nothing is filled in.'
-          : 'This usually takes 20–60 seconds.'}
-      </p>
-      <div className="panel">
-        <Progress stages={stages} current={job.stage} />
+    <div className="working">
+      <div className="working-halo">
+        <Mochi size={170} mood="search" />
       </div>
-      <div>
-        <button className="btn btn-ghost" onClick={onBack}>
-          Cancel
-        </button>
+      <h1 className="visually-hidden">{extracting ? 'Reading your label' : 'Explaining your label'}</h1>
+      <SpeechBubble>{stages[index].line}</SpeechBubble>
+      <div className="segments" role="progressbar" aria-valuemin={1} aria-valuemax={stages.length} aria-valuenow={index + 1}>
+        {stages.map((s, i) => (
+          <span key={s.id} className={i < index ? 'done' : i === index ? 'active' : ''} />
+        ))}
       </div>
+      <p className="muted small">Mochi is on it. This only takes a moment.</p>
+      <button className="text-btn" onClick={onBack}>
+        Cancel
+      </button>
     </div>
   );
 }

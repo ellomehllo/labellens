@@ -78,14 +78,15 @@ Any model you choose needs image input and JSON-schema output. The same prompts,
 
 Code layout: `core/` is the pipeline shared by the server and the browser (prompts, sources, AI adapters, validation, vault), `server/` is the Node API, `src/` is the React app.
 
-1. **Capture** (`src/screens/Capture.tsx`): camera or upload, up to 4 photos. The browser orients, downsizes and re-encodes them as JPEG and runs quick blur/darkness/glare hints.
+0. **Intro** (`src/screens/Intro.tsx`): first visit only. Mochi, the capybara guide, says hello; Settings → "Say hi again" replays it.
+1. **Scanner** (`src/screens/Capture.tsx`): dark camera screen that starts the camera straight away, with Photos, History and "Try a sample label". Up to 4 photos. The browser orients, downsizes and re-encodes them as JPEG and runs quick blur/darkness/glare hints.
 2. **Read** (`POST /api/extract`): the AI model transcribes only visible text into typed sections, marks unreadable characters with `[?]`, and guesses category and market. Images stay in memory for that request only.
-3. **Review** (`src/screens/Review.tsx`): the user corrects critical fields (ingredients, allergens, amounts, directions, warnings, dates) and confirms category and market. Typed text and a clearly labelled example label use the same screen.
+3. **Quick check** (`src/screens/Review.tsx`): photo card, product type, counts and photo quality (Clear / Partly clear / Hard to read, never an invented percentage), and "What Mochi read" with Fix text for correcting ingredients, amounts, warnings and dates. Typed text and the clearly labelled sample use the same screen.
 4. **Explain** (`POST /api/analyze`): text only. The model returns structured findings and may cite only `source_id`/`point_id` pairs from the curated registry (`core/sources.ts`); it can't supply URLs.
 5. **Validate** (`core/analysis.ts`): references are resolved against the registry and unknown ones are dropped. A "verified" finding with no resolvable source is downgraded to "Not verified". Sentences stating absolute safety verdicts are removed and the removal is disclosed. A jurisdiction caveat is added when a source's country differs from the selected market.
-6. **Results** (`src/screens/Results.tsx`): summary, label facts, precautions, ingredients grouped by purpose, source-checked and unverified findings, limits, and a correction loop. Poison-help guidance appears for cleaners and label first-aid warnings.
+6. **Your label** (`src/screens/Results.tsx`): a headline and label-based chips, then Summary (care cards, Ask Mochi questions answered in the same pass, other findings with type badges), Ingredients (label order, amount, role tag, what it does, full label text) and Sources (what was source-checked, read clarity, sources with dates, what couldn't be verified, limits). Poison-help guidance appears for cleaners and label first-aid warnings.
 
-Progress steps are streamed from the server as each stage actually starts. History is opt-in and stored only in the browser (text, never photos).
+Progress steps are streamed as each stage actually starts. Scan history is on by default, kept only in this browser tab for the session (text, never photos), and can be turned off or cleared in Settings.
 
 ## Curated sources
 

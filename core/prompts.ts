@@ -1,4 +1,4 @@
-import { CATEGORIES, CONFIDENCE, FINDING_TYPES, RELEVANCE, SECTION_KINDS } from '../shared/types.ts';
+import { CATEGORIES, CONFIDENCE, FINDING_TYPES, HIGHLIGHT_KINDS, RELEVANCE, SECTION_KINDS } from '../shared/types.ts';
 import { SOURCES, sourcesForPrompt } from './sources.ts';
 
 const nullable = (schema: object) => ({ anyOf: [schema, { type: 'null' }] });
@@ -89,7 +89,10 @@ You receive label text that was read from photos (and possibly corrected by the 
 - label_facts: the key fields as printed (e.g. "Net quantity", "Best before", "Contains", "Directions"). Values are the label's words, lightly trimmed.
 - findings: 3–12 items, most useful first. Each explanation is 1–3 sentences. Use relevance "precaution" for directions/warnings that matter for correct use, "urgent_label_warning" only for the label's own poisoning/first-aid/danger statements, otherwise "informational".
 - confidence on findings: how sure you are the explanation is correct given the text ("high"/"medium"/"low"); use null for label_fact findings.
-- ingredient_groups: group ingredients by function or relevance (e.g. "Sweeteners", "Preservatives", "Active ingredient", "Listed allergens"), never into good/bad lists. Explanations are one short sentence about the ingredient's usual purpose; use "low" confidence when the name is ambiguous or possibly misread. Leave the list empty if there is no ingredient list.
+- headline: at most 6 words describing what the product is from the label, e.g. "Oat drink with four ingredients." Neutral, no verdicts, no health or safety claims.
+- highlights: 2–4 very short chips (1–3 words each) taken from the label itself, e.g. "4 ingredients", "Plant-based" only if every listed ingredient plainly is, "Chill after opening", "Contains milk". kind: count, diet, storage, allergen, warning, claim or other. Never a verdict like "Healthy" or "Safe".
+- ingredients: every declared ingredient in label order. percent: the amount exactly as printed (e.g. "10%"), else null. role: one or two words for its usual function (e.g. "Base", "Main ingredient", "Sweetener", "Preservative", "Texture", "Taste", "Active ingredient"), never good/bad. explanation: one short sentence about its usual purpose in this kind of product. Use "low" confidence when the name is ambiguous or possibly misread. Empty if there is no ingredient list.
+- questions: 3–4 questions a shopper would tap for this category (food: "Is it vegan?", "Any allergens?", "How long does it keep?", "Why the <ingredient>?"; cosmetics: "Is it fragrance-free?", "How do I use it?"; cleaners: "Can I mix it?", "What if it's swallowed?"; supplements: "How much per day?", "Can I take it with medicine?"). Questions are 2–5 words. Answers are 1–3 sentences, follow every rule above, say what the label shows and what it can't tell, and suggest what to check when it matters (e.g. "look for a certified vegan mark"). type and evidence work like findings; "Can I mix it?" answers must say not to mix products.
 - category_note: if the text clearly fits a different category than the one given, say so in one sentence; otherwise null.
 - next_steps: 1–4 practical, non-medical suggestions (e.g. "Check the back panel photo for the full ingredient list", "Ask a pharmacist if you take other medicines").
 - Write for a general audience. Short sentences, no jargon without a gloss.
@@ -99,8 +102,21 @@ Each point has an id. Cite as {"source_id": "...", "point_id": "..."}. Dates sho
 
 ${sourcesForPrompt()}`;
 
+const evidenceRefs = {
+  type: 'array',
+  items: obj({
+    source_id: { type: 'string', enum: SOURCES.map((s) => s.id) },
+    point_id: str,
+  }),
+};
+
 export const ANALYZE_SCHEMA = obj({
   product_name: nullable(str),
+  headline: str,
+  highlights: {
+    type: 'array',
+    items: obj({ text: str, kind: { type: 'string', enum: [...HIGHLIGHT_KINDS] } }),
+  },
   brand: nullable(str),
   summary: str,
   category_note: nullable(str),
@@ -115,24 +131,27 @@ export const ANALYZE_SCHEMA = obj({
       confidence: nullable({ type: 'string', enum: [...CONFIDENCE] }),
       label_quote: nullable(str),
       limitations: strList,
-      evidence: {
-        type: 'array',
-        items: obj({
-          source_id: { type: 'string', enum: SOURCES.map((s) => s.id) },
-          point_id: str,
-        }),
-      },
+      evidence: evidenceRefs,
       why_unverified: nullable(str),
     }),
   },
-  ingredient_groups: {
+  ingredients: {
     type: 'array',
     items: obj({
-      group: str,
-      items: {
-        type: 'array',
-        items: obj({ name: str, explanation: str, confidence: { type: 'string', enum: [...CONFIDENCE] } }),
-      },
+      name: str,
+      percent: nullable(str),
+      role: str,
+      explanation: str,
+      confidence: { type: 'string', enum: [...CONFIDENCE] },
+    }),
+  },
+  questions: {
+    type: 'array',
+    items: obj({
+      question: str,
+      answer: str,
+      type: { type: 'string', enum: [...FINDING_TYPES] },
+      evidence: evidenceRefs,
     }),
   },
   unreadable_or_missing: strList,

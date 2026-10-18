@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { VaultFile } from '../../core/vault.ts';
 import { Icon } from '../components/Icon.tsx';
-import { Notice, PageTitle } from '../components/ui.tsx';
+import { Mochi, SpeechBubble } from '../components/Mochi.tsx';
+import { Notice } from '../components/ui.tsx';
 import { unlock } from '../lib/unlock.ts';
 
 export type Gate =
@@ -16,15 +17,17 @@ export function Unlock({ gate, onUnlocked }: { gate: Gate; onUnlocked: () => voi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (gate.state === 'loading') return <p className="muted">Loading…</p>;
+  if (gate.state === 'loading') return <div className="unlock" aria-busy="true" />;
 
   if (gate.state === 'missing') {
     return (
-      <div className="unlock stack">
-        <PageTitle>LabelLens isn’t set up yet</PageTitle>
+      <div className="unlock">
+        <SpeechBubble>I’m not set up yet.</SpeechBubble>
+        <Mochi size={150} mood="sleep" />
+        <h1 className="visually-hidden">LabelLens isn’t set up yet</h1>
         <Notice tone="warn" title="No AI key has been added to this site">
           The site owner needs to add the <code>AI_API_KEY</code> and <code>APP_PASSWORD</code> secrets in the GitHub
-          repository settings, then re-run the Pages deployment.
+          repository, then re-run the Pages deployment.
         </Notice>
       </div>
     );
@@ -40,25 +43,30 @@ export function Unlock({ gate, onUnlocked }: { gate: Gate; onUnlocked: () => voi
       setPassword('');
       onUnlocked();
     } catch (err) {
-      setError(err instanceof Error && 'code' in err && err.code === 'wrong_password' ? 'That password didn’t work. Try again.' : 'Couldn’t unlock. Please try again.');
+      setError(
+        err instanceof Error && 'code' in err && err.code === 'wrong_password'
+          ? 'That password didn’t work. Try again.'
+          : 'Couldn’t unlock. Please try again.',
+      );
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="unlock stack">
-      <PageTitle eyebrow="Password protected">Unlock LabelLens</PageTitle>
-      <p className="muted">
-        Enter the password you were given. It unlocks the AI key this site uses, right here in your browser.
-      </p>
+    <div className="unlock">
+      <span className="wordmark">LabelLens</span>
+      <SpeechBubble>{error ? 'Hmm, that’s not it.' : 'Hi! What’s the password?'}</SpeechBubble>
+      <Mochi size={140} />
+      <h1 className="visually-hidden">Unlock LabelLens</h1>
       <form onSubmit={submit}>
-        <label className="field" htmlFor="site-password">
+        <label className="visually-hidden" htmlFor="site-password">
           Password
         </label>
         <input
           id="site-password"
           type="password"
+          placeholder="Password"
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -67,23 +75,22 @@ export function Unlock({ gate, onUnlocked }: { gate: Gate; onUnlocked: () => voi
           disabled={busy}
           autoFocus
         />
-        <label className="switch">
+        <label className="check">
           <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
           Stay unlocked on this device
         </label>
         {error && (
-          <div id="unlock-error">
-            <Notice tone="danger">{error}</Notice>
-          </div>
+          <p id="unlock-error" role="alert" className="small error-text">
+            {error}
+          </p>
         )}
-        <button className="btn btn-primary" type="submit" disabled={busy || !password}>
-          <Icon name="shield" />
+        <button className="btn-primary" type="submit" disabled={busy || !password}>
+          <Icon name="lock" />
           {busy ? 'Unlocking…' : 'Unlock'}
         </button>
       </form>
-      <p className="muted small">
-        Without “stay unlocked”, the key is forgotten when you close this tab. Use “Lock” in the header to forget it
-        sooner. <a href="#/privacy">Privacy</a>
+      <p className="fineprint">
+        The password unlocks this site’s AI key in your browser. <a href="#/privacy">Privacy</a>
       </p>
     </div>
   );

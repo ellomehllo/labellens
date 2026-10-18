@@ -105,3 +105,33 @@ test('analyze requests need some text', () => {
   assert.throws(() => checkAnalyzeRequest({ sections: [{ kind: 'ingredients', text: '  ' }] }), /no label text/);
   assert.equal(checkAnalyzeRequest({ sections: [{ kind: 'warnings', text: 'Keep away from eyes' }], market: 'other' }).market, null);
 });
+
+test('ingredients, questions and highlights are validated like findings', () => {
+  const out = buildAnalysis(
+    {
+      summary: 'An oat drink.',
+      headline: 'Oat drink with four ingredients.',
+      highlights: [
+        { text: '4 ingredients', kind: 'count' },
+        { text: 'Healthy choice', kind: 'claim' },
+        { text: 'Chill after opening', kind: 'storage' },
+      ],
+      ingredients: [
+        { name: 'Water', percent: null, role: 'Base', explanation: 'The main liquid.', confidence: 'high' },
+        { name: 'Oats', percent: '10%', role: 'Main ingredient', explanation: 'Gives body and flavour.', confidence: 'high' },
+      ],
+      questions: [
+        { question: 'Is it vegan?', answer: 'It is completely safe for everyone. Everything listed is plant-based.', type: 'interpretation', evidence: [] },
+        { question: 'Any allergens?', answer: 'Oats are listed.', type: 'verified_claim', evidence: [{ source_id: 'nope', point_id: 'x' }] },
+      ],
+      findings: [],
+    },
+    request,
+    'test-model',
+  );
+  assert.deepEqual(out.highlights.map((h) => h.text), ['4 ingredients', 'Chill after opening']);
+  assert.equal(out.ingredients[1].percent, '10%');
+  assert.doesNotMatch(out.questions[0].answer, /completely safe/);
+  assert.equal(out.questions[1].type, 'unverified');
+  assert.equal(out.headline, 'Oat drink with four ingredients.');
+});

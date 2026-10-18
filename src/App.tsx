@@ -8,20 +8,21 @@ import {
   type LabelSection,
   type ServiceStatus,
 } from '../shared/types.ts';
-import { Icon } from './components/Icon.tsx';
 import { analyzeLabel, ApiError, extractLabel, getStatus } from './lib/api.ts';
-import { deleteScan, getScan, getSettings, saveScan } from './lib/history.ts';
+import { getScan, saveScan } from './lib/history.ts';
 import type { PreparedImage } from './lib/image.ts';
 import { STATIC_SITE } from './lib/mode.ts';
 import { go, useRoute, type Route } from './lib/router.ts';
+import { getSettings, updateSettings } from './lib/settings.ts';
 import { fetchVault, getUnlocked, lock, setCurrent } from './lib/unlock.ts';
 import { blankSections, exampleSections } from './lib/sample.ts';
 import { Capture } from './screens/Capture.tsx';
 import { HistoryScreen } from './screens/History.tsx';
-import { About } from './screens/About.tsx';
+import { Intro } from './screens/Intro.tsx';
 import { Privacy } from './screens/Privacy.tsx';
 import { Results } from './screens/Results.tsx';
 import { Review } from './screens/Review.tsx';
+import { Settings } from './screens/Settings.tsx';
 import { Sources } from './screens/Sources.tsx';
 import { Unlock, type Gate } from './screens/Unlock.tsx';
 import { Working } from './screens/Working.tsx';
@@ -146,7 +147,7 @@ export function App() {
         (stage) => setJob((j) => (j ? { ...j, stage } : j)),
         controller.signal,
       );
-      const saved = getSettings().autoSave ? saveScan(analysis, flow.sections) : null;
+      const saved = getSettings().saveHistory ? saveScan(analysis, flow.sections) : null;
       setFlow((f) => ({ ...f, analysis, savedId: saved?.id ?? null }));
       abortRef.current = null;
       setJob(null);
@@ -165,22 +166,19 @@ export function App() {
 
   const startExample = () => {
     startNew();
-    setFlow({ ...emptyFlow(), input: 'example', sections: exampleSections(), category: 'food', market: 'US' });
+    setFlow({ ...emptyFlow(), input: 'example', sections: exampleSections(), category: 'food', market: null });
     go('/review');
   };
 
-  const locked = gate.state !== 'open';
-  const content =
-    locked && route.name !== 'privacy' ? (
-      <Unlock
-        gate={gate}
-        onUnlocked={() => {
-          if (gate.state === 'locked') setGate({ state: 'open', vault: gate.vault });
-        }}
-      />
-    ) : (
-      renderRoute(route)
-    );
+  const scanAnother = () => {
+    startNew();
+    go('/');
+  };
+
+  const finishIntro = () => {
+    updateSettings({ introSeen: true });
+    go('/', { replace: true });
+  };
 
   function lockApp() {
     lock();
@@ -190,9 +188,13 @@ export function App() {
     go('/');
   }
 
+  /** Back from an inner screen: browser history when there is some, else the scanner. */
+  const back = () => (history.length > 1 ? history.back() : go('/'));
+
   function renderRoute(r: Route) {
     switch (r.name) {
       case 'home':
+        if (!getSettings().introSeen) return <Redirect to="/intro" />;
         return (
           <Capture
             images={flow.images}
@@ -201,10 +203,12 @@ export function App() {
             onContinue={readLabel}
             onTyped={startTyped}
             onExample={startExample}
+            onSettings={() => go('/settings')}
+            onHistory={() => go('/history')}
           />
         );
-      case 'about':
-        return <About status={status} onScan={() => go('/')} onTyped={startTyped} onExample={startExample} />;
+      case 'intro':
+        return <Intro onDone={finishIntro} />;
       case 'reading':
       case 'analyzing':
         if (!job) return <Redirect to={r.name === 'reading' ? '/' : '/review'} />;
@@ -218,34 +222,17 @@ export function App() {
         );
       case 'review':
         if (flow.sections.length === 0 && !flow.extraction) return <Redirect to="/" />;
-        return (
-          <Review
-            flow={flow}
-            onChange={updateFlow}
-            onAnalyze={analyze}
-            onRetake={() => go('/')}
-          />
-        );
+        return <Review flow={flow} onChange={updateFlow} onAnalyze={analyze} onRetake={() => go('/')} onBack={back} />;
       case 'results':
         if (!flow.analysis) return <Redirect to="/" />;
         return (
           <Results
             analysis={flow.analysis}
-            savedId={flow.savedId}
-            onSave={() => {
-              const scan = flow.analysis ? saveScan(flow.analysis, flow.sections) : null;
-              if (scan) updateFlow({ savedId: scan.id });
-              return Boolean(scan);
-            }}
-            onUnsave={() => {
-              if (flow.savedId) deleteScan(flow.savedId);
-              updateFlow({ savedId: null });
-            }}
-            onCorrect={() => go('/review')}
-            onNew={() => {
-              startNew();
-              go('/');
-            }}
+            sections={flow.sections}
+            onBack={() => go('/review')}
+            onNew={scanAnother}
+            onHistory={() => go('/history')}
+            onSettings={() => go('/settings')}
           />
         );
       case 'saved': {
@@ -254,86 +241,45 @@ export function App() {
         return (
           <Results
             analysis={scan.analysis}
-            savedId={scan.id}
-            fromHistory
-            onSave={() => true}
-            onUnsave={() => {}}
-            onCorrect={() => {
-              startNew();
-              setFlow({
-                ...emptyFlow(),
-                input: scan.analysis.meta.input,
-                sections: scan.sections,
-                category: scan.analysis.product.category,
-                market: scan.analysis.product.market,
-              });
-              go('/review');
-            }}
-            onNew={() => {
-              startNew();
-              go('/');
-            }}
+            sections={scan.sections}
+            onBack={back}
+            onNew={scanAnother}
+            onHistory={() => go('/history')}
+            onSettings={() => go('/settings')}
           />
         );
       }
       case 'history':
-        return <HistoryScreen />;
+        return <HistoryScreen onBack={back} onScan={scanAnother} />;
+      case 'settings':
+        return (
+          <Settings
+            status={status}
+            onBack={back}
+            onReplayIntro={() => go('/intro')}
+            onLock={STATIC_SITE && gate.state === 'open' ? lockApp : null}
+          />
+        );
       case 'privacy':
-        return <Privacy status={status} />;
+        return <Privacy status={status} onBack={back} />;
       case 'sources':
-        return <Sources />;
+        return <Sources onBack={back} />;
     }
   }
 
+  const locked = gate.state !== 'open';
   return (
     <div className="app">
-      <a className="skip-link" href="#main" onClick={(e) => {
-        e.preventDefault();
-        document.getElementById('main')?.focus();
-      }}>
-        Skip to content
-      </a>
-      <header className="site-header">
-        <div className="inner">
-          <a className="brand" href="#/">
-            <span className="brand-mark">
-              <Icon name="tag" size={18} />
-            </span>
-            LabelLens
-          </a>
-          <nav className="site-nav" aria-label="Main">
-            {!locked && (
-              <>
-                <a href="#/history" aria-current={route.name === 'history' || route.name === 'saved' ? 'page' : undefined}>
-                  History
-                </a>
-                <a href="#/sources" aria-current={route.name === 'sources' ? 'page' : undefined}>
-                  Sources
-                </a>
-              </>
-            )}
-            <a href="#/privacy" aria-current={route.name === 'privacy' ? 'page' : undefined}>
-              Privacy
-            </a>
-            {STATIC_SITE && !locked && (
-              <button className="nav-btn" onClick={lockApp} title="Forget the unlocked key on this device">
-                Lock
-              </button>
-            )}
-          </nav>
-        </div>
-      </header>
-      <main id="main" tabIndex={-1}>
-        {content}
-      </main>
-      <footer className="site-footer">
-        <div className="inner">
-          <span>LabelLens explains labels. It doesn’t replace the label, a professional or a regulator.</span>
-          <span>
-            <a href="#/privacy">Privacy</a> · <a href="#/sources">Sources</a>
-          </span>
-        </div>
-      </footer>
+      {locked && route.name !== 'privacy' ? (
+        <Unlock
+          gate={gate}
+          onUnlocked={() => {
+            if (gate.state === 'locked') setGate({ state: 'open', vault: gate.vault });
+          }}
+        />
+      ) : (
+        renderRoute(route)
+      )}
     </div>
   );
 }

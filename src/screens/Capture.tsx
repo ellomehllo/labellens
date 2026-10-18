@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { LIMITS, type ServiceStatus } from '../../shared/types.ts';
 import { Icon } from '../components/Icon.tsx';
-import { Notice, PageTitle } from '../components/ui.tsx';
-import { aiName } from '../lib/api.ts';
+import { MochiTips } from '../components/Mochi.tsx';
+import { Notice } from '../components/ui.tsx';
 import { prepareImage, type PreparedImage } from '../lib/image.ts';
-import { STATIC_SITE } from '../lib/mode.ts';
 
-// The landing screen: the camera opens straight away so the main action is pointing it at a label.
-// Uploading, typing the text and the example are secondary options below.
+// The landing screen: a dark scanner whose camera starts straight away. Photos, typed text and the
+// sample label are secondary routes.
 
 interface Props {
   images: PreparedImage[];
@@ -16,13 +15,15 @@ interface Props {
   onContinue: () => void;
   onTyped: () => void;
   onExample: () => void;
+  onSettings: () => void;
+  onHistory: () => void;
 }
 
 type CameraState = 'off' | 'starting' | 'live' | 'denied' | 'unavailable' | 'error';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif';
 
-export function Capture({ images, status, onChange, onContinue, onTyped, onExample }: Props) {
+export function Capture({ images, status, onChange, onContinue, onTyped, onExample, onSettings, onHistory }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -31,7 +32,6 @@ export function Capture({ images, status, onChange, onContinue, onTyped, onExamp
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(0);
-  const [dragging, setDragging] = useState(false);
 
   // Each start gets a ticket; a stream that arrives after a newer start or unmount is stopped at once.
   const ticketRef = useRef(0);
@@ -103,20 +103,17 @@ export function Capture({ images, status, onChange, onContinue, onTyped, onExamp
     canvas.getContext('2d')?.drawImage(video, 0, 0);
     setFlash((n) => n + 1);
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.92));
-    if (!blob) return;
-    await addBlobs([blob]);
+    if (blob) await addBlobs([blob]);
   }
 
-  async function addBlobs(blobs: Blob[]): Promise<boolean> {
+  async function addBlobs(blobs: Blob[]) {
     setError(null);
     const room = LIMITS.maxImages - images.length;
     if (room <= 0) {
-      setError(`You can add up to ${LIMITS.maxImages} photos.`);
-      return false;
+      setError(`That’s ${LIMITS.maxImages} photos, the most for one label.`);
+      return;
     }
-    if (blobs.length > room) {
-      setError(`Only the first ${room} photo${room === 1 ? '' : 's'} were added (limit ${LIMITS.maxImages}).`);
-    }
+    if (blobs.length > room) setError(`Only the first ${room} photo${room === 1 ? '' : 's'} were added (limit ${LIMITS.maxImages}).`);
     setBusy(true);
     try {
       const prepared: PreparedImage[] = [];
@@ -125,10 +122,8 @@ export function Capture({ images, status, onChange, onContinue, onTyped, onExamp
       }
       onChange([...images, ...prepared]);
       if (images.length + prepared.length >= LIMITS.maxImages) closeCamera();
-      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Couldn’t add that photo.');
-      return false;
     } finally {
       setBusy(false);
     }
@@ -138,117 +133,138 @@ export function Capture({ images, status, onChange, onContinue, onTyped, onExamp
     const img = images.find((i) => i.id === id);
     if (img) URL.revokeObjectURL(img.previewUrl);
     onChange(images.filter((i) => i.id !== id));
-    if (camera === 'off' && images.length - 1 < LIMITS.maxImages) void startCamera();
+    if (camera === 'off') void startCamera();
   }
 
-  const upload = () => fileRef.current?.click();
-  const cameraOn = camera === 'live' || camera === 'starting';
-  const warnings = images.flatMap((img, i) => img.warnings.map((w) => `Photo ${i + 1}: ${w}`));
+  const live = camera === 'live';
+  // One hint per photo keeps the controls on screen; the review step reports readability in full.
+  const warnings = images.flatMap((img, i) => (img.warnings.length ? [`Photo ${i + 1}: ${img.warnings[0]}`] : []));
+  const tips =
+    images.length > 0
+      ? full
+        ? ['That’s all four sides. Tap Read label and I’ll get started.']
+        : ['Got it! Snap another side, or tap Read label.', 'Ingredients, directions and warnings help most.']
+      : live
+        ? ['Fill the frame with the ingredients or warnings.', 'No label handy? Try the sample below.', 'Got several sides? Snap up to 4 photos.']
+        : ['Tap the big button and I’ll open the camera.', 'No label handy? Try the sample below.'];
 
   return (
-    <div className="stack scanner">
-      <div className="scan-head">
-        <PageTitle>Scan a label</PageTitle>
-        <p className="muted">
-          {images.length === 0
-            ? 'Point at the ingredients, directions or warnings and fill the frame.'
-            : full
-              ? `That’s ${LIMITS.maxImages} photos, the most for one label.`
-              : 'Add another side of the pack, or read the label now.'}
-        </p>
-      </div>
+    <div className="scanner">
+      <video ref={videoRef} playsInline muted aria-label="Camera preview" hidden={!live} />
+      {live && <div className="scanner-shade" />}
+      {flash > 0 && <div className="camera-flash" key={flash} aria-hidden="true" />}
 
-      {status === 'offline' && (
-        <Notice tone="danger" title="Can’t reach the LabelLens server">
-          The page loaded, but the server isn’t answering. Try again in a moment.
-        </Notice>
-      )}
+      <header className="scanner-head">
+        <h1>LabelLens</h1>
+        <button className="glass-btn" onClick={onSettings} aria-label="Settings">
+          <Icon name="gear" size={20} />
+        </button>
+      </header>
+
+      {status === 'offline' && <Notice tone="danger" title="Can’t reach the LabelLens server">Try again in a moment.</Notice>}
       {status && status !== 'offline' && !status.ai && (
-        <Notice tone="warn" title="Label analysis isn’t switched on yet">
-          {status.problem === 'unknown_key'
-            ? 'The server has an AI key, but LabelLens can’t tell which provider it belongs to. '
-            : 'This server has no AI key configured, so reading labels won’t work yet. '}
-          The site owner needs to set <code>AI_API_KEY</code>
-          {status.problem === 'unknown_key' ? <> and <code>AI_PROVIDER</code></> : null}.
+        <Notice tone="warn" title="Label reading isn’t switched on yet">
+          The site owner needs to add an AI key (<code>AI_API_KEY</code>).
         </Notice>
       )}
 
-      {cameraOn ? (
-        <div className="camera">
-          <video ref={videoRef} playsInline muted aria-label="Camera preview" />
-          <div className="camera-frame" />
-          {camera === 'starting' && (
-            <div className="camera-message" aria-live="polite">
-              Starting the camera… Allow access if your browser asks.
-            </div>
-          )}
-          {flash > 0 && <div className="camera-flash" key={flash} aria-hidden="true" />}
-          <div className="camera-bar">
-            <button className="camera-side" onClick={upload} disabled={busy} aria-label="Upload photos instead">
-              <Icon name="upload" />
-              <span>Upload</span>
-            </button>
-            <button
-              className="shutter"
-              onClick={capture}
-              disabled={camera !== 'live' || busy || full}
-              aria-label={`Take photo ${images.length + 1} of up to ${LIMITS.maxImages}`}
-            />
-            <span className="camera-side camera-count" aria-live="polite">
-              {images.length}/{LIMITS.maxImages}
-            </span>
-          </div>
-        </div>
-      ) : (
-        <div
-          className={`dropzone${dragging ? ' dragging' : ''}`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragging(false);
-            void addBlobs([...e.dataTransfer.files]);
-          }}
-        >
-          {camera === 'denied' && (
-            <Notice tone="warn" title="Camera access is blocked">
-              Allow the camera for this site in your browser settings, or upload photos of the label instead.
-            </Notice>
-          )}
-          {camera === 'unavailable' && (
-            <Notice tone="info" title="No camera available">
-              This device or browser doesn’t offer a camera here. Upload photos of the label instead.
-            </Notice>
-          )}
-          {camera === 'error' && (
-            <Notice tone="warn" title="The camera couldn’t start">
-              Another app may be using it. Try again, or upload photos instead.
-            </Notice>
-          )}
-          {full ? (
-            <p className="muted">Remove a photo to take another.</p>
-          ) : (
-            <>
-              <div className="row">
-                <button className="btn btn-primary" onClick={upload} disabled={busy}>
-                  <Icon name="upload" />
-                  {images.length ? 'Add more photos' : 'Upload photos'}
-                </button>
+      <div className="viewfinder">
+        <i />
+        <i />
+        <i />
+        <i />
+        {!live && (
+          <div className="viewfinder-note">
+            {camera === 'starting' ? (
+              <span>Opening the camera… allow access if your browser asks.</span>
+            ) : full ? (
+              <span>Remove a photo to take another.</span>
+            ) : (
+              <>
                 {camera !== 'unavailable' && (
-                  <button className="btn" onClick={startCamera} disabled={busy}>
+                  <button className="glass-pill" onClick={startCamera}>
                     <Icon name="camera" />
-                    {camera === 'off' ? 'Open camera' : 'Try the camera again'}
+                    Turn on camera
                   </button>
                 )}
-              </div>
-              <span className="muted small">or drag photos here · JPEG, PNG, WebP or HEIC</span>
-            </>
-          )}
+                {camera === 'denied' && <span>Camera access is blocked. Allow it in your browser settings, or pick from Photos.</span>}
+                {camera === 'unavailable' && <span>No camera here. Pick a label from Photos instead.</span>}
+                {camera === 'error' && <span>The camera couldn’t start. Another app may be using it.</span>}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="scanner-bottom">
+        {images.length > 0 && (
+          <div className="stack tight">
+            <div className="shot-tray">
+              <ul aria-label="Your photos">
+                {images.map((img, i) => (
+                  <li key={img.id}>
+                    <img src={img.previewUrl} alt={`Photo ${i + 1} of the label`} />
+                    <button className="shot-remove" onClick={() => remove(img.id)} aria-label={`Remove photo ${i + 1}`}>
+                      <Icon name="x" size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                className="read-pill"
+                onClick={() => {
+                  closeCamera();
+                  onContinue();
+                }}
+                disabled={busy}
+              >
+                Read label
+                <Icon name="chevronRight" size={16} />
+              </button>
+            </div>
+            {warnings.map((w) => (
+              <span className="shot-warn" key={w}>
+                <Icon name="alert" size={14} />
+                {w}
+              </span>
+            ))}
+          </div>
+        )}
+        {error && <Notice tone="danger">{error}</Notice>}
+
+        <MochiTips tips={tips} dark />
+
+        <div className="controls">
+          <button className="side-ctl" onClick={() => fileRef.current?.click()} disabled={busy || full}>
+            <span>
+              <Icon name="image" />
+            </span>
+            <span>Photos</span>
+          </button>
+          <button
+            className="shutter"
+            onClick={live ? capture : startCamera}
+            disabled={busy || full || camera === 'starting' || camera === 'unavailable'}
+            aria-label={live ? `Take photo ${images.length + 1} of up to ${LIMITS.maxImages}` : 'Turn on camera'}
+          />
+          <button className="side-ctl" onClick={onHistory}>
+            <span>
+              <Icon name="history" />
+            </span>
+            <span>History</span>
+          </button>
         </div>
-      )}
+
+        <button className="sample-pill" onClick={onExample}>
+          <Icon name="sparkles" size={16} />
+          Try a sample label
+        </button>
+        <div className="scanner-links">
+          <button onClick={onTyped}>Type the text instead</button>
+          <a href="#/privacy">Privacy</a>
+        </div>
+      </div>
+
       <input
         ref={fileRef}
         type="file"
@@ -260,76 +276,6 @@ export function Capture({ images, status, onChange, onContinue, onTyped, onExamp
           e.target.value = '';
         }}
       />
-
-      {error && <Notice tone="danger">{error}</Notice>}
-      {busy && (
-        <p className="muted small" aria-live="polite">
-          Preparing photo…
-        </p>
-      )}
-
-      {images.length > 0 && (
-        <section aria-label="Your photos" className="stack tight">
-          <ul className="thumb-strip">
-            {images.map((img, i) => (
-              <li key={img.id}>
-                <img src={img.previewUrl} alt={`Photo ${i + 1} of the label`} />
-                <button className="thumb-remove" onClick={() => remove(img.id)} aria-label={`Remove photo ${i + 1}`}>
-                  <Icon name="x" size={14} />
-                </button>
-              </li>
-            ))}
-          </ul>
-          {warnings.length > 0 && (
-            <ul className="photo-warnings">
-              {warnings.map((w) => (
-                <li key={w}>
-                  <Icon name="alert" size={14} />
-                  {w}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      {images.length > 0 && (
-        <div className="sticky-actions">
-          <button
-            className="btn btn-primary"
-            onClick={() => {
-              closeCamera();
-              onContinue();
-            }}
-            disabled={busy}
-          >
-            Read the label ({images.length} photo{images.length === 1 ? '' : 's'})
-          </button>
-        </div>
-      )}
-
-      <div className="scan-alternatives">
-        {cameraOn && (
-          <button className="btn btn-small" onClick={upload} disabled={busy || full}>
-            <Icon name="upload" size={16} />
-            Upload photos instead
-          </button>
-        )}
-        <div className="text-links">
-          <button className="link-btn" onClick={onTyped}>
-            Type the label text
-          </button>
-          <button className="link-btn" onClick={onExample}>
-            Try an example label
-          </button>
-          <a href="#/about">How LabelLens works</a>
-        </div>
-      </div>
-
-      <p className="muted small scan-privacy">
-        <Icon name="shield" size={14} /> Photos go {STATIC_SITE ? 'straight from your browser ' : ''}to {aiName(status)} to
-        read the text and aren’t kept. <a href="#/privacy">Privacy</a>
-      </p>
     </div>
   );
 }
