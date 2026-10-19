@@ -166,6 +166,7 @@ test('Gemini request uses inline images, system instruction and a JSON schema', 
   assert.deepEqual(call.body.contents[0].parts[0], { inlineData: { mimeType: 'image/jpeg', data: 'AAAA' } });
   assert.equal(call.body.generationConfig.responseMimeType, 'application/json');
   assert.doesNotMatch(JSON.stringify(call.body.generationConfig.responseJsonSchema), /anyOf/);
+  assert.deepEqual(call.body.generationConfig.thinkingConfig, { thinkingLevel: 'medium' });
 });
 
 test('Gemini blocks and truncation map to clear codes', async () => {

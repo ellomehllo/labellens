@@ -10,8 +10,8 @@ export const callAnthropic: ProviderCall = async (config, { system, images, text
   if (!client) {
     client = new Anthropic({
       apiKey: config.apiKey,
-      maxRetries: 2,
-      timeout: 180_000,
+      maxRetries: 1,
+      timeout: 120_000,
       // The GitHub Pages build calls Claude straight from the browser with a password-protected key.
       dangerouslyAllowBrowser: 'window' in globalThis,
     });

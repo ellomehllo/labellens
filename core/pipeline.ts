@@ -17,7 +17,7 @@ export async function runExtract(config: AiConfig, images: ImageInput[], onStage
     images,
     text: `These ${images.length} photo(s) show one product's packaging. Transcribe the label text as instructed.`,
     schema: EXTRACT_SCHEMA,
-    effort: 'medium',
+    effort: 'low', // transcription, not reasoning: keeps label reading fast
     maxTokens: 16000,
     signal,
   });

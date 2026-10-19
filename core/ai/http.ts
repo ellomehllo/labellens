@@ -1,6 +1,6 @@
 import { AppError } from '../errors.ts';
 
-const TIMEOUT_MS = 180_000;
+const TIMEOUT_MS = 120_000;
 const RETRIES = 2;
 
 export function parseJson(text: string): unknown {
@@ -37,6 +37,10 @@ export async function postJson(
       });
     } catch (error) {
       if (signal?.aborted) throw error;
+      // A request that ran out the clock is not retried: that would multiply the wait.
+      if (error instanceof DOMException && error.name === 'TimeoutError') {
+        throw new AppError('ai_timeout', 'The AI service took too long to answer. Please try again.', 504);
+      }
       if (attempt < RETRIES) {
         await sleep(attempt);
         continue;

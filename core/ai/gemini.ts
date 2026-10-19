@@ -12,7 +12,7 @@ interface GeminiResponse {
   candidates?: { finishReason?: string; content?: { parts?: { text?: string; thought?: boolean }[] } }[];
 }
 
-export const callGemini: ProviderCall = async (config, { system, images, text, schema, maxTokens, signal }) => {
+export const callGemini: ProviderCall = async (config, { system, images, text, schema, effort, maxTokens, signal }) => {
   const base = config.baseUrl ?? BASE_URL;
   const body = {
     systemInstruction: { parts: [{ text: system }] },
@@ -26,6 +26,9 @@ export const callGemini: ProviderCall = async (config, { system, images, text, s
       responseMimeType: 'application/json',
       responseJsonSchema: toTypeUnions(schema),
       maxOutputTokens: maxTokens,
+      // Gemini 3 models think before answering (medium or high by default), which is slow for plain
+      // transcription; the request's effort sets the level.
+      thinkingConfig: { thinkingLevel: effort },
     },
   };
 

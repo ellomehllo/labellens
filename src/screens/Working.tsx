@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { Job } from '../App.tsx';
 import { Mochi, SpeechBubble } from '../components/Mochi.tsx';
 import { Notice } from '../components/ui.tsx';
@@ -26,6 +27,7 @@ interface Props {
 export function Working({ job, onRetry, onBack, onTyped }: Props) {
   const extracting = job.kind === 'extract';
   const stages = extracting ? EXTRACT_STAGES : ANALYZE_STAGES;
+  const slow = useSlow(job.stage, 20_000);
 
   if (job.error) {
     const notConfigured = ['ai_not_configured', 'ai_auth', 'ai_quota', 'ai_model'].includes(job.error.code);
@@ -69,10 +71,25 @@ export function Working({ job, onRetry, onBack, onTyped }: Props) {
           <span key={s.id} className={i < index ? 'done' : i === index ? 'active' : ''} />
         ))}
       </div>
-      <p className="muted small">Mochi is on it. This only takes a moment.</p>
+      <p className="muted small" aria-live="polite">
+        {slow
+          ? 'Still working. Busy AI servers and big labels can take up to a minute, or you can cancel and try again.'
+          : 'Mochi is on it. This only takes a moment.'}
+      </p>
       <button className="text-btn" onClick={onBack}>
         Cancel
       </button>
     </div>
   );
+}
+
+/** True once the same stage has run longer than `ms`. */
+function useSlow(stage: string | null, ms: number): boolean {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    setSlow(false);
+    const timer = setTimeout(() => setSlow(true), ms);
+    return () => clearTimeout(timer);
+  }, [stage, ms]);
+  return slow;
 }
