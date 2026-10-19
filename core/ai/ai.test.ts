@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { ANALYZE_SCHEMA, EXTRACT_SCHEMA } from '../prompts.ts';
 import { detectProvider, resolveConfig } from './config.ts';
+import { providerReason } from './http.ts';
 import { callGemini, toTypeUnions } from './gemini.ts';
 import { callOpenAiCompatible } from './openai.ts';
 import type { AiConfig, StructuredRequest } from './types.ts';
@@ -176,4 +177,23 @@ test('Gemini blocks and truncation map to clear codes', async () => {
   await assert.rejects(callGemini(cfg, request), { code: 'ai_truncated' });
   stubFetch({ status: 400, text: '{"error":{"status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}' });
   await assert.rejects(callGemini(cfg, request), { code: 'ai_auth' });
+});
+
+test('rate limits that mention billing are not reported as out of credit', async () => {
+  stubFetch({
+    status: 429,
+    text: '{"error":{"code":"rate_limit_exceeded","message":"Rate limit reached for gpt-6-astra on tokens per min. Visit https://platform.openai.com/account/billing to increase your limits."}}',
+  });
+  await assert.rejects(callOpenAiCompatible(config({}), request), (e: any) => e.code === 'ai_busy' && /Rate limit reached/.test(e.message));
+  stubFetch({ status: 429, text: '{"error":{"code":"insufficient_quota","message":"You exceeded your current quota, please check your plan and billing details."}}' });
+  await assert.rejects(callOpenAiCompatible(config({}), request), (e: any) => e.code === 'ai_quota' && /exceeded your current quota/.test(e.message));
+  stubFetch({ status: 402, text: '{"error":{"message":"Insufficient credits"}}' });
+  await assert.rejects(callOpenAiCompatible(config({ provider: 'openrouter' }), request), { code: 'ai_quota' });
+});
+
+test('provider reasons never echo a key', () => {
+  const reason = providerReason('{"error":{"message":"Incorrect API key provided: sk-proj-AbCdEfGhIjKlMnOp1234. Also AIzaSyAbcdefghijkl."}}');
+  assert.ok(reason);
+  assert.doesNotMatch(reason, /AbCdEfGh|Syabcdefgh|AIzaSyA/i);
+  assert.equal(providerReason('<!DOCTYPE html><html>'), null);
 });
