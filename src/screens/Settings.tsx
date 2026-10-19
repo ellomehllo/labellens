@@ -3,7 +3,7 @@ import type { ServiceStatus } from '../../shared/types.ts';
 import { Icon, type IconName } from '../components/Icon.tsx';
 import { Mochi } from '../components/Mochi.tsx';
 import { TopBar } from '../components/ui.tsx';
-import { aiName } from '../lib/api.ts';
+import { aiName, ApiError, pingAi } from '../lib/api.ts';
 import { deleteAllScans, listScans } from '../lib/history.ts';
 import { STATIC_SITE } from '../lib/mode.ts';
 import { updateSettings, useSettings } from '../lib/settings.ts';
@@ -18,6 +18,20 @@ interface Props {
 export function Settings({ status, onBack, onReplayIntro, onLock }: Props) {
   const settings = useSettings();
   const [count, setCount] = useState(() => listScans().length);
+  const [check, setCheck] = useState<{ state: 'idle' | 'running' | 'ok' | 'failed'; text: string }>({
+    state: 'idle',
+    text: 'Sends one tiny request and times the reply.',
+  });
+
+  async function testConnection() {
+    setCheck({ state: 'running', text: 'Asking the AI provider…' });
+    try {
+      const r = await pingAi();
+      setCheck({ state: 'ok', text: `Working: ${r.provider} · ${r.model} answered in ${(r.ms / 1000).toFixed(1)}s.` });
+    } catch (e) {
+      setCheck({ state: 'failed', text: e instanceof ApiError || e instanceof Error ? e.message : 'The test failed.' });
+    }
+  }
 
   return (
     <>
@@ -72,6 +86,17 @@ export function Settings({ status, onBack, onReplayIntro, onLock }: Props) {
             }}
           />
           {onLock && <LinkRow icon="lock" title="Lock LabelLens" text="Forget the unlocked key on this device." onClick={onLock} />}
+        </div>
+
+        <h3 className="section-label">Connection</h3>
+        <div className="card group">
+          <LinkRow
+            icon={check.state === 'ok' ? 'checkCircle' : check.state === 'failed' ? 'alert' : 'sparkles'}
+            title={check.state === 'running' ? 'Testing…' : 'Test AI connection'}
+            text={check.text}
+            disabled={check.state === 'running'}
+            onClick={testConnection}
+          />
         </div>
 
         <h3 className="section-label">About</h3>

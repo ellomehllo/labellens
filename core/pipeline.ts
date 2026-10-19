@@ -65,3 +65,24 @@ export async function runAnalyze(config: AiConfig, request: AnalyzeRequest, onSt
   onStage('checking_wording');
   return analysis;
 }
+
+export interface PingResult {
+  provider: string;
+  model: string;
+  ms: number;
+}
+
+/** A tiny text-only structured call, used by "Test AI connection" to check the key, model and speed. */
+export async function runPing(config: AiConfig, signal?: AbortSignal): Promise<PingResult> {
+  const started = Date.now();
+  await structuredCall(config, {
+    system: 'You check that a connection works. Reply with ok set to true.',
+    images: [],
+    text: 'Connection check.',
+    schema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'], additionalProperties: false },
+    effort: 'low',
+    maxTokens: 1000,
+    signal,
+  });
+  return { provider: PROVIDER_NAMES[config.provider], model: config.model, ms: Date.now() - started };
+}

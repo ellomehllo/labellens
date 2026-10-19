@@ -27,7 +27,8 @@ interface Props {
 export function Working({ job, onRetry, onBack, onTyped }: Props) {
   const extracting = job.kind === 'extract';
   const stages = extracting ? EXTRACT_STAGES : ANALYZE_STAGES;
-  const slow = useSlow(job.stage, 20_000);
+  const seconds = useSeconds(job.error ? null : job.kind);
+  const slow = seconds >= 20;
 
   if (job.error) {
     const notConfigured = ['ai_not_configured', 'ai_auth', 'ai_quota', 'ai_model'].includes(job.error.code);
@@ -76,6 +77,7 @@ export function Working({ job, onRetry, onBack, onTyped }: Props) {
           ? 'Still working. Busy AI servers and big labels can take up to a minute, or you can cancel and try again.'
           : 'Mochi is on it. This only takes a moment.'}
       </p>
+      <p className="meta-line">{seconds}s</p>
       <button className="text-btn" onClick={onBack}>
         Cancel
       </button>
@@ -83,13 +85,15 @@ export function Working({ job, onRetry, onBack, onTyped }: Props) {
   );
 }
 
-/** True once the same stage has run longer than `ms`. */
-function useSlow(stage: string | null, ms: number): boolean {
-  const [slow, setSlow] = useState(false);
+/** Seconds since this job (extract or analyze) started; resets for a new job. */
+function useSeconds(key: string | null): number {
+  const [seconds, setSeconds] = useState(0);
   useEffect(() => {
-    setSlow(false);
-    const timer = setTimeout(() => setSlow(true), ms);
-    return () => clearTimeout(timer);
-  }, [stage, ms]);
-  return slow;
+    setSeconds(0);
+    if (!key) return;
+    const started = Date.now();
+    const timer = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [key]);
+  return seconds;
 }

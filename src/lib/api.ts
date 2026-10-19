@@ -48,6 +48,15 @@ export async function analyzeLabel(request: AnalyzeRequest, onStage: (stage: str
   return streamCall<Analysis>('/api/analyze', request, onStage, signal);
 }
 
+/** Times one tiny request to the configured AI provider. */
+export async function pingAi(): Promise<{ provider: string; model: string; ms: number }> {
+  if (STATIC_SITE) return (await local()).localPing();
+  const res = await fetch('/api/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(payload?.error?.code ?? 'server_error', payload?.error?.message ?? `Request failed (${res.status}).`);
+  return payload;
+}
+
 export async function sendFeedback(body: {
   reason: string;
   category: string;

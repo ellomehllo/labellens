@@ -2,7 +2,7 @@ import { appendFile, mkdir } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { checkAnalyzeRequest } from '../core/analysis.ts';
 import { AppError } from '../core/errors.ts';
-import { runAnalyze, runExtract } from '../core/pipeline.ts';
+import { runAnalyze, runExtract, runPing } from '../core/pipeline.ts';
 import { SOURCES } from '../core/sources.ts';
 import { CATEGORIES, FINDING_TYPES, LIMITS, type ServiceStatus } from '../shared/types.ts';
 import { aiStatus, requireAi } from './ai.ts';
@@ -43,6 +43,8 @@ export async function apiHandler(req: IncomingMessage, res: ServerResponse, next
         return await extract(req, res);
       case 'POST /api/analyze':
         return await analyze(req, res);
+      case 'POST /api/ping':
+        return sendJson(res, 200, await runPing(limitAi(req)));
       case 'POST /api/feedback':
         return await feedback(req, res);
       default:

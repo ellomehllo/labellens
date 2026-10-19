@@ -1,7 +1,7 @@
 import { PROVIDER_NAMES, type AiConfig } from '../../core/ai/types.ts';
 import { checkAnalyzeRequest } from '../../core/analysis.ts';
 import { AppError } from '../../core/errors.ts';
-import { runAnalyze, runExtract } from '../../core/pipeline.ts';
+import { runAnalyze, runExtract, runPing, type PingResult } from '../../core/pipeline.ts';
 import { SOURCES } from '../../core/sources.ts';
 import type { Analysis, AnalyzeRequest, Extraction, ServiceStatus, Source } from '../../shared/types.ts';
 import { ApiError } from './api.ts';
@@ -47,4 +47,8 @@ export function localExtract(images: PreparedImage[], onStage: (stage: string) =
 
 export function localAnalyze(request: AnalyzeRequest, onStage: (stage: string) => void, signal: AbortSignal): Promise<Analysis> {
   return run(() => runAnalyze(config(), checkAnalyzeRequest(request), onStage, signal));
+}
+
+export function localPing(): Promise<PingResult> {
+  return run(() => runPing(config()));
 }
