@@ -22,7 +22,8 @@ export function detectProvider(key: string): ProviderId | null {
   const k = key.trim();
   if (k.startsWith('sk-ant-')) return 'anthropic';
   if (k.startsWith('sk-or-')) return 'openrouter';
-  if (k.startsWith('AIza')) return 'gemini';
+  // Google AI Studio issues "AQ." authentication keys now; older keys start with "AIza".
+  if (k.startsWith('AIza') || k.startsWith('AQ.')) return 'gemini';
   if (k.startsWith('sk-')) return 'openai';
   return null;
 }

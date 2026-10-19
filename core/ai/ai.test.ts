@@ -53,6 +53,7 @@ test('providers are detected from key prefixes', () => {
   assert.equal(detectProvider('sk-ant-api03-abc'), 'anthropic');
   assert.equal(detectProvider('sk-or-v1-abc'), 'openrouter');
   assert.equal(detectProvider('AIzaSyABC'), 'gemini');
+  assert.equal(detectProvider('AQ.Ab8FAKEKEY'), 'gemini');
   assert.equal(detectProvider('sk-proj-abc'), 'openai');
   assert.equal(detectProvider('sk-svcacct-abc'), 'openai');
   assert.equal(detectProvider('gsk_abc'), null);

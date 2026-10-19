@@ -96,6 +96,7 @@ export function providerReason(detail: string): string | null {
   message = message
     .replace(/\b(sk-[A-Za-z0-9]{0,4})[A-Za-z0-9_*-]{6,}/g, '$1…')
     .replace(/\bAIza[0-9A-Za-z_-]{6,}/g, 'AIza…')
+    .replace(/\bAQ\.[0-9A-Za-z_-]{6,}/g, 'AQ.…')
     .replace(/\s+/g, ' ')
     .trim();
   if (!message || /^<!doctype|^<html/i.test(message)) return null;

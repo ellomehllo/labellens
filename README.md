@@ -69,7 +69,7 @@ The provider is detected from the key, and each adapter lives in `core/ai/`:
 | --- | --- | --- | --- |
 | Anthropic | `sk-ant-…` | `claude-opus-5-5` | Official SDK, structured outputs, prompt caching |
 | OpenAI | `sk-…` / `sk-proj-…` | `gpt-6-astra` | Chat Completions, strict JSON schema |
-| Google Gemini | `AIza…` | `gemini-3.8-flash` | `generateContent`, JSON schema |
+| Google Gemini | `AQ.…` / `AIza…` | `gemini-3.8-flash` | `generateContent`, JSON schema |
 | OpenRouter | `sk-or-…` | `anthropic/claude-opus-5.5` | Chat Completions, routed only to schema-enforcing endpoints |
 
 Any model you choose needs image input and JSON-schema output. The same prompts, source registry and server-side validation apply whichever provider answers.
